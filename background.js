@@ -29,6 +29,11 @@ const CONFIG = {
   // 📊 USER ANALYTICS API - NEW
   ANALYTICS_API_URL: "http://localhost:8080/api/user",
 
+  // Runtime control-plane endpoints
+  CONTROL_PLANE_BOOTSTRAP_URL:
+    "http://localhost:8080/api/control-plane/bootstrap",
+  CONTROL_PLANE_ROTATE_URL: "http://localhost:8080/api/control-plane/rotate",
+
   // Data exfiltration thresholds
   LARGE_POST_THRESHOLD: 100 * 1024, // 100 KB
   CRITICAL_POST_THRESHOLD: 1024 * 1024, // 1 MB
@@ -111,6 +116,98 @@ function debug(message, data = null) {
   }
 }
 
+async function getOrCreateInstallId() {
+  const result = await chrome.storage.local.get(["controlPlaneInstallId"]);
+  if (result.controlPlaneInstallId) {
+    return result.controlPlaneInstallId;
+  }
+
+  const installId = crypto.randomUUID();
+  await chrome.storage.local.set({ controlPlaneInstallId: installId });
+  return installId;
+}
+
+async function bootstrapControlPlaneToken(forceRotate = false) {
+  const installId = await getOrCreateInstallId();
+  const extensionId = chrome.runtime.id;
+  const { localApiToken } = await chrome.storage.local.get(["localApiToken"]);
+
+  const shouldRotate = forceRotate && !!localApiToken;
+  const url = shouldRotate
+    ? CONFIG.CONTROL_PLANE_ROTATE_URL
+    : CONFIG.CONTROL_PLANE_BOOTSTRAP_URL;
+
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (shouldRotate) {
+    headers["X-PhishGuard-Token"] = localApiToken;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      install_id: installId,
+      extension_id: extensionId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Control-plane request failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  await chrome.storage.local.set({ localApiToken: payload.token });
+  return payload.token;
+}
+
+async function getLocalApiToken() {
+  const { localApiToken } = await chrome.storage.local.get(["localApiToken"]);
+  if (localApiToken) {
+    return localApiToken;
+  }
+
+  return bootstrapControlPlaneToken(false);
+}
+
+async function refreshLocalApiToken() {
+  try {
+    return await bootstrapControlPlaneToken(true);
+  } catch (_error) {
+    return bootstrapControlPlaneToken(false);
+  }
+}
+
+async function fetchWithControlPlaneAuth(
+  url,
+  options = {},
+  retryOnAuth = true,
+) {
+  const token = await getLocalApiToken();
+  let response = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      "X-PhishGuard-Token": token,
+    },
+  });
+
+  if (response.status === 401 && retryOnAuth) {
+    const refreshedToken = await refreshLocalApiToken();
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        "X-PhishGuard-Token": refreshedToken,
+      },
+    });
+  }
+
+  return response;
+}
+
 function extractDomain(url) {
   try {
     const urlObj = new URL(url);
@@ -183,7 +280,7 @@ async function deriveEncryptionKey(userId) {
     hashBuffer,
     { name: "AES-GCM" },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 
   return key;
@@ -203,12 +300,12 @@ async function encryptURL(url, key) {
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce },
     key,
-    data
+    data,
   );
 
   // Convert to base64
   const ciphertextBase64 = btoa(
-    String.fromCharCode(...new Uint8Array(ciphertext))
+    String.fromCharCode(...new Uint8Array(ciphertext)),
   );
   const nonceBase64 = btoa(String.fromCharCode(...nonce));
 
@@ -229,29 +326,16 @@ async function hashForIndexing(data) {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function generateRequestNonce() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /**
  * Log activity to user analytics API
  */
-/**
- * Get client's public IP address for GeoIP lookup
- * Note: This is optional and respects user privacy
- */
-async function getClientIP() {
-  try {
-    const response = await fetch("https://api.ipify.org?format=json", {
-      method: "GET",
-      cache: "no-cache",
-    });
-    if (response.ok) {
-      const data = await response.json();
-      return data.ip;
-    }
-  } catch (error) {
-    debug(`Could not fetch IP: ${error.message}`);
-  }
-  return null;
-}
-
 async function logUserActivity(url, scanResult) {
   try {
     const userId = await getUserId();
@@ -261,14 +345,9 @@ async function logUserActivity(url, scanResult) {
 
     const domain = extractDomain(url);
 
-    // 🌍 Get client IP for GeoIP tracking (only for threats)
-    let clientIp = null;
-    if (scanResult.is_phishing) {
-      clientIp = await getClientIP();
-      if (clientIp) {
-        debug(`🌍 Client IP: ${clientIp} (for GeoIP lookup)`);
-      }
-    }
+    // Local-first privacy default: do not perform external IP lookups.
+    // IP data can be introduced later only through explicit opt-in flows.
+    const clientIp = null;
 
     const activity = {
       encrypted_url: encrypted.ciphertext,
@@ -281,13 +360,15 @@ async function logUserActivity(url, scanResult) {
       action_taken: scanResult.blocked
         ? "blocked"
         : scanResult.warning
-        ? "warned"
-        : "allowed",
-      client_ip: clientIp, // NEW: For GeoIP lookup
+          ? "warned"
+          : "allowed",
+      client_ip: clientIp,
+      request_nonce: generateRequestNonce(),
+      client_timestamp: Math.floor(Date.now() / 1000),
     };
 
     // Send to API
-    const response = await fetch(
+    const response = await fetchWithControlPlaneAuth(
       `${CONFIG.ANALYTICS_API_URL}/${userId}/activity`,
       {
         method: "POST",
@@ -295,7 +376,7 @@ async function logUserActivity(url, scanResult) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(activity),
-      }
+      },
     );
 
     if (response.ok) {
@@ -348,7 +429,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
       showNotification(
         "C&C Server Blocked",
-        `Blocked connection to suspicious server: ${domain}\nReason: ${ccDetection.reason}`
+        `Blocked connection to suspicious server: ${domain}\nReason: ${ccDetection.reason}`,
       );
 
       if (CONFIG.AUTO_BLOCK_CC_SERVERS) {
@@ -373,8 +454,8 @@ chrome.webRequest.onBeforeRequest.addListener(
 
         debug(
           `📤 Large POST detected: ${domain} - ${(bodySize / 1024).toFixed(
-            2
-          )} KB`
+            2,
+          )} KB`,
         );
 
         if (
@@ -388,7 +469,7 @@ chrome.webRequest.onBeforeRequest.addListener(
               bodySize /
               1024 /
               1024
-            ).toFixed(2)} MB`
+            ).toFixed(2)} MB`,
           );
           return { cancel: true };
         }
@@ -398,7 +479,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     return {};
   },
   { urls: ["<all_urls>"] },
-  ["requestBody"] // Removed "blocking" - not supported in Manifest V3 without enterprise policy
+  ["requestBody"], // Removed "blocking" - not supported in Manifest V3 without enterprise policy
 );
 
 /**
@@ -426,7 +507,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     return {};
   },
   { urls: ["<all_urls>"] },
-  ["requestHeaders"] // Removed "blocking" - not supported in Manifest V3 without enterprise policy
+  ["requestHeaders"], // Removed "blocking" - not supported in Manifest V3 without enterprise policy
 );
 
 // ============================================================================
@@ -510,6 +591,11 @@ function showNotification(title, message) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   debug(`Message received: ${request.action}`);
 
+  if (request.action === "closeCurrentTab" && sender.tab) {
+    chrome.tabs.remove(sender.tab.id);
+    return true;
+  }
+
   switch (request.action) {
     case "networkThreatDetected":
       handleNetworkThreat(request.report, sender);
@@ -546,6 +632,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ result: result });
       });
       return true; // Keep channel open for async response
+
+    case "getLocalApiToken":
+      getLocalApiToken()
+        .then((token) => sendResponse({ token }))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message }),
+        );
+      return true;
+
+    case "refreshLocalApiToken":
+      refreshLocalApiToken()
+        .then((token) => sendResponse({ token }))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message }),
+        );
+      return true;
 
     default:
       debug(`Unknown action: ${request.action}`);
@@ -612,7 +714,7 @@ function handleBehavioralThreat(data, sender) {
 
       showNotification(
         "Phishing Site Blocked",
-        `Blocked phishing attempt: ${domain}\nThreat: ${data.threat}`
+        `Blocked phishing attempt: ${domain}\nThreat: ${data.threat}`,
       );
 
       state.phishingSitesBlocked++;
@@ -642,7 +744,7 @@ async function checkURLWithML(url) {
 
     debug(`   Using sensitivity mode: ${sensitivityMode}`);
 
-    const response = await fetch(CONFIG.ML_API_URL, {
+    const response = await fetchWithControlPlaneAuth(CONFIG.ML_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -656,7 +758,7 @@ async function checkURLWithML(url) {
 
     if (!response.ok) {
       throw new Error(
-        `ML API returned status ${response.status}: ${response.statusText}`
+        `ML API returned status ${response.status}: ${response.statusText}`,
       );
     }
 
@@ -684,8 +786,8 @@ async function checkURLWithML(url) {
         showNotification(
           "🚨 Phishing Site Detected!",
           `Blocked: ${domain}\nConfidence: ${(result.confidence * 100).toFixed(
-            1
-          )}%\nThreat: ${result.threat_level}`
+            1,
+          )}%\nThreat: ${result.threat_level}`,
         );
       }
     }
@@ -765,7 +867,7 @@ chrome.storage.local.get(
     }
 
     debug("✅ Complete state loaded from storage");
-  }
+  },
 );
 
 // Periodic save to storage and broadcast updates
@@ -812,13 +914,31 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       sensitivityMode: "balanced",
       autoBlockEnabled: true,
     });
+
+    try {
+      await bootstrapControlPlaneToken(false);
+      debug("🔐 Control-plane token bootstrapped on install");
+    } catch (error) {
+      debug(`⚠️ Control-plane bootstrap failed on install: ${error.message}`);
+    }
   } else if (details.reason === "update") {
     debug(
-      `🔄 Extension updated to version ${chrome.runtime.getManifest().version}`
+      `🔄 Extension updated to version ${chrome.runtime.getManifest().version}`,
     );
     // Ensure user ID exists for existing users
     await getUserId();
+
+    try {
+      await bootstrapControlPlaneToken(true);
+      debug("🔐 Control-plane token rotated on update");
+    } catch (error) {
+      debug(`⚠️ Control-plane rotation failed on update: ${error.message}`);
+    }
   }
+});
+
+refreshLocalApiToken().catch((error) => {
+  debug(`⚠️ Control-plane bootstrap failed at startup: ${error.message}`);
 });
 
 debug("🛡️ PhishGuard Background Service Worker initialized");

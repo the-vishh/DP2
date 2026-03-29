@@ -1,159 +1,765 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Phishing Detector Dashboard</title>
-    <link rel="stylesheet" href="dashboard.css" />
+    <title>PhishGuard AI - Security Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
     <script src="chart.min.js"></script>
   </head>
   <body>
     <div class="dashboard-container">
-      <header class="dashboard-header">
-        <h1>AI Phishing Detector Dashboard</h1>
-      </header>
-
-      <div class="dashboard-grid">
-        <!-- Daily Phishing Attempts Card -->
-        <div class="card card-large">
-          <div class="card-header">
-            <h2>Daily Phishing Attempts:</h2>
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <div class="logo">
+            <div class="logo-icon"></div>
+            <h2>PhishGuard AI</h2>
           </div>
-          <div class="card-content">
-            <div class="stat-number" id="daily-attempts">1,234</div>
-            <canvas id="miniTrendChart" class="mini-chart"></canvas>
-            <div class="shield-icon">
-              <svg
-                width="60"
-                height="60"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 2L4 5V11C4 16.55 7.84 21.74 12 23C16.16 21.74 20 16.55 20 11V5L12 2Z"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  fill="none"
-                />
-                <path
-                  d="M9 12L11 14L15 10"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+        </div>
+
+        <div class="nav-menu">
+          <a href="#" class="nav-item active" data-page="dashboard">
+            <span class="nav-icon"></span>
+            <span class="nav-text">Dashboard</span>
+          </a>
+          <a href="#" class="nav-item" data-page="history">
+            <span class="nav-icon"></span>
+            <span class="nav-text">Detection History</span>
+          </a>
+          <a href="#" class="nav-item" data-page="analytics">
+            <span class="nav-icon"></span>
+            <span class="nav-text">Analytics</span>
+          </a>
+          <a href="#" class="nav-item" data-page="settings">
+            <span class="nav-icon"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></span>
+            <span class="nav-text">Settings</span>
+          </a>
+          <a href="#" class="nav-item" data-page="help">
+            <span class="nav-icon"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></span>
+            <span class="nav-text">Help</span>
+          </a>
+        </div>
+      </nav>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="header-title">
+            <h1 id="pageTitle">Security Dashboard</h1>
+            <p id="pageSubtitle">Real-time threat monitoring and protection</p>
+            <div class="sync-meta">
+              <span id="lastSync">Not synced yet</span>
+              <span class="dot-divider"></span>
+              <span id="dataMode">Live data only</span>
             </div>
           </div>
-        </div>
-
-        <!-- Top Threat Sources Card -->
-        <div class="card card-large">
-          <div class="card-header">
-            <h2>Top Threat Sources:</h2>
-            <p class="card-subtitle" id="top-source">Social Media</p>
-          </div>
-          <div class="card-content chart-container">
-            <canvas id="threatPieChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Blocked Attacks Card -->
-        <div class="card card-small">
-          <div class="card-header">
-            <h2>Blocked Attacks:</h2>
-          </div>
-          <div class="card-content">
-            <div class="stat-number" id="blocked-percentage">89%</div>
-            <div class="shield-icon">
-              <svg
-                width="60"
-                height="60"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 2L4 5V11C4 16.55 7.84 21.74 12 23C16.16 21.74 20 16.55 20 11V5L12 2Z"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  fill="none"
-                />
-                <path
-                  d="M9 12L11 14L15 10"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+          <div class="header-controls">
+            <div class="time-filter">
+              <select id="timeRange" class="form-control time-select">
+                <option value="24h" selected>Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+              </select>
+            </div>
+            <div class="status-indicator">
+              <div id="systemStatusLight" class="status-light"></div>
+              <span id="systemStatusText">Checking backend...</span>
             </div>
           </div>
-        </div>
+        </header>
 
-        <!-- New Attack Variants Card -->
-        <div class="card card-small">
-          <div class="card-header">
-            <h2>New Attack Variants:</h2>
+        <section id="page-dashboard" class="page-section active">
+          <!-- Hero Statistics Cards -->
+          <section class="hero-stats">
+            <div class="stat-card">
+              <div class="stat-content">
+                <div class="stat-icon phishing"></div>
+                <div class="stat-info">
+                  <h3 id="attacksPrevented">--</h3>
+                  <p>Phishing Attacks Prevented</p>
+                  <div class="stat-trend positive">
+                    <span class="trend-icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></span>
+                    <span id="blockedTrend">Awaiting telemetry</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-content">
+                <div class="stat-icon scanning"></div>
+                <div class="stat-info">
+                  <h3 id="sitesScanned">--</h3>
+                  <p>Sites Scanned Today</p>
+                  <div class="stat-trend positive">
+                    <span class="trend-icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></span>
+                    <span id="scanTrend">Awaiting telemetry</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-content">
+                <div class="stat-icon detection"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
+                <div class="stat-info">
+                  <h3 id="detectionRate">--</h3>
+                  <p>Threat Detection Rate</p>
+                  <div class="stat-trend positive">
+                    <span class="trend-icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></span>
+                    <span id="confidenceTrend">Confidence unavailable</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-content">
+                <div class="stat-icon users"></div>
+                <div class="stat-info">
+                  <h3 id="activeUsers">--</h3>
+                  <p>Active Users Protected</p>
+                  <div class="stat-trend positive">
+                    <span class="trend-icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></span>
+                    <span id="usersTrend">Awaiting telemetry</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Analytics Section -->
+          <section class="analytics-section">
+            <div class="chart-grid">
+              <!-- Threats Over Time -->
+              <div class="chart-container large">
+                <div class="chart-header">
+                  <h3>Threats Detected Over Time</h3>
+                  <p>Last 24 hours</p>
+                </div>
+                <div
+                  class="chart-wrapper"
+                  style="position: relative; height: 300px"
+                >
+                  <canvas id="threatsChart"></canvas>
+                </div>
+              </div>
+
+              <!-- Threat Types Distribution -->
+              <div class="chart-container">
+                <div class="chart-header">
+                  <h3>Threat Types Distribution</h3>
+                  <p>Current classification</p>
+                </div>
+                <div
+                  class="chart-wrapper"
+                  style="position: relative; height: 250px"
+                >
+                  <canvas id="threatTypesChart"></canvas>
+                </div>
+              </div>
+
+              <!-- Top Threat Sources -->
+              <div class="chart-container">
+                <div class="chart-header">
+                  <h3>Top Threat Sources</h3>
+                  <p>By country/region</p>
+                </div>
+                <div
+                  class="chart-wrapper"
+                  style="position: relative; height: 250px"
+                >
+                  <canvas id="threatSourcesChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Activity and Status Section -->
+          <section class="activity-status-section">
+            <div class="activity-status-grid">
+              <!-- Recent Activity Feed -->
+              <div class="activity-feed">
+                <div class="section-header">
+                  <h3>Recent Activity</h3>
+                  <div class="live-indicator">
+                    <div class="pulse-dot"></div>
+                    <span>Live</span>
+                  </div>
+                </div>
+                <div class="activity-list" id="activityList">
+                  <!-- Activity items will be populated by JavaScript -->
+                </div>
+              </div>
+
+              <!-- System Status Panel -->
+              <div class="system-status">
+                <div class="section-header">
+                  <h3>System Status</h3>
+                  <div id="systemHealthBadge" class="status-badge">Unknown</div>
+                </div>
+                <div class="status-metrics">
+                  <div class="status-metric">
+                    <div class="metric-label">AI Model Performance</div>
+                    <div class="metric-value">
+                      <div class="progress-bar">
+                        <div
+                          id="aiAccuracyBar"
+                          class="progress-fill"
+                          style="width: 0%"
+                        ></div>
+                      </div>
+                      <span id="aiAccuracy">--</span>
+                    </div>
+                  </div>
+
+                  <div class="status-metric">
+                    <div class="metric-label">Processing Speed</div>
+                    <div class="metric-value">
+                      <span id="processingSpeed">--</span>
+                      <div class="metric-status good">Good</div>
+                    </div>
+                  </div>
+
+                  <div class="status-metric">
+                    <div class="metric-label">Database Status</div>
+                    <div class="metric-value">
+                      <div id="dbStatusLight" class="status-light"></div>
+                      <span id="dbStatus">Unknown</span>
+                    </div>
+                  </div>
+
+                  <div class="status-metric">
+                    <div class="metric-label">Scan Queue</div>
+                    <div class="metric-value">
+                      <span id="queueLength">--</span>
+                      <span class="metric-unit">items</span>
+                    </div>
+                  </div>
+
+                  <div class="status-metric">
+                    <div class="metric-label">Last Model Update</div>
+                    <div class="metric-value">
+                      <span id="lastUpdate">Unknown</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="page-history" class="page-section">
+          <div class="panel-card">
+            <div class="panel-header-row">
+              <h3>Detection History</h3>
+              <div class="panel-header-actions">
+                <button id="refreshHistoryBtn" class="secondary-button">
+                  Refresh
+                </button>
+                <button id="historyExportBtn" class="secondary-button">
+                  Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div class="history-command-bar">
+              <label class="history-search-wrap" for="historySearch">
+                <span>Search Domain</span>
+                <input
+                  id="historySearch"
+                  type="search"
+                  class="history-search-input"
+                  placeholder="e.g. secure-bank-login.com"
+                />
+              </label>
+              <label for="historyThreatFilter">
+                <span>Threat Type</span>
+                <select id="historyThreatFilter" class="form-control">
+                  <option value="all" selected>All</option>
+                  <option value="phishing">Phishing</option>
+                  <option value="malware">Malware</option>
+                  <option value="scam">Scam</option>
+                  <option value="suspicious">Suspicious</option>
+                  <option value="safe">Safe</option>
+                </select>
+              </label>
+              <label for="historyStatusFilter">
+                <span>Action</span>
+                <select id="historyStatusFilter" class="form-control">
+                  <option value="all" selected>All</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="allowed">Allowed</option>
+                </select>
+              </label>
+              <label for="historySortBy">
+                <span>Sort</span>
+                <select id="historySortBy" class="form-control">
+                  <option value="newest" selected>Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="confidence">Highest Confidence</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="history-kpi-strip">
+              <article class="history-kpi-card">
+                <span>Total Events</span>
+                <strong id="historyTotalEvents">0</strong>
+              </article>
+              <article class="history-kpi-card">
+                <span>Blocked</span>
+                <strong id="historyBlockedEvents">0</strong>
+              </article>
+              <article class="history-kpi-card">
+                <span>High Confidence</span>
+                <strong id="historyHighConfidence">0</strong>
+              </article>
+              <article class="history-kpi-card">
+                <span>Most Targeted Domain</span>
+                <strong id="historyTopDomain">--</strong>
+              </article>
+            </div>
+
+            <div class="table-wrap">
+              <table class="history-table history-table-premium">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Domain</th>
+                    <th>Threat Type</th>
+                    <th>Confidence</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody"></tbody>
+              </table>
+            </div>
+            <p id="historyEmptyHint" class="history-empty-hint"></p>
           </div>
-          <div class="card-content">
-            <div class="stat-number" id="new-variants">12</div>
-            <div class="warning-icon">
-              <svg
-                width="60"
-                height="60"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+        </section>
+
+        <section id="page-analytics" class="page-section">
+          <div class="analytics-insight-band">
+            <article class="insight-tile">
+              <span>Peak Risk Window</span>
+              <strong id="insightPeakWindow">--</strong>
+            </article>
+            <article class="insight-tile">
+              <span>Most Frequent Threat</span>
+              <strong id="insightTopThreat">--</strong>
+            </article>
+            <article class="insight-tile">
+              <span>Average Model Confidence</span>
+              <strong id="insightAvgConfidence">--</strong>
+            </article>
+            <article class="insight-tile">
+              <span>Current Protection Posture</span>
+              <strong id="insightPosture">Live Monitoring</strong>
+            </article>
+          </div>
+
+          <div class="chart-grid">
+            <div class="chart-container">
+              <div class="chart-header">
+                <h3>Threat Levels</h3>
+                <p>Distribution from scans</p>
+              </div>
+              <div
+                class="chart-wrapper"
+                style="position: relative; height: 260px"
               >
-                <path
-                  d="M12 2L2 20H22L12 2Z"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  fill="none"
-                />
-                <path
-                  d="M12 9V13M12 17H12.01"
-                  stroke="#4ade80"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+                <canvas id="analyticsThreatChart"></canvas>
+              </div>
+            </div>
+
+            <div class="chart-container">
+              <div class="chart-header">
+                <h3>Weekly Scan Volume</h3>
+                <p>Rolling activity trend</p>
+              </div>
+              <div
+                class="chart-wrapper"
+                style="position: relative; height: 260px"
+              >
+                <canvas id="analyticsVolumeChart"></canvas>
+              </div>
+            </div>
+
+            <div class="chart-container large">
+              <div class="chart-header">
+                <h3>Protection Effectiveness</h3>
+                <p>Blocked threats vs total scans</p>
+              </div>
+              <div class="analytics-kpi-grid">
+                <div class="analytics-kpi">
+                  <span>Threats Blocked</span>
+                  <strong id="analyticsBlocked">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span>Total Scans</span>
+                  <strong id="analyticsScans">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span>Block Ratio</span>
+                  <strong id="analyticsRatio">0%</strong>
+                </div>
+              </div>
+              <div class="analytics-kpi-grid analytics-kpi-grid-secondary">
+                <div class="analytics-kpi">
+                  <span>Critical + High</span>
+                  <strong id="analyticsHighRisk">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span>Allowed Traffic</span>
+                  <strong id="analyticsAllowed">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span>Most Active Domain</span>
+                  <strong id="analyticsTopDomain">--</strong>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Phishing Trend Card -->
-        <div class="card card-large">
-          <div class="card-header">
-            <h2>Phishing Trend</h2>
-            <p class="card-subtitle">(Last 7 Days)</p>
+        <section id="page-settings" class="page-section">
+          <div class="settings-hero panel-card">
+            <div class="settings-hero-content">
+              <div class="settings-hero-badge">Security Control Center</div>
+              <h3>Tune Your Protection Strategy</h3>
+              <p>
+                Customize detection strictness, automation, and alert behavior
+                with production-style controls.
+              </p>
+            </div>
+            <div class="settings-hero-orb"></div>
           </div>
-          <div class="card-content chart-container">
-            <canvas id="trendLineChart"></canvas>
-          </div>
-        </div>
 
-        <!-- Attack Distribution Card -->
-        <div class="card card-large">
-          <div class="card-header">
-            <h2>Attack Distribution by Type</h2>
+          <div class="settings-grid settings-grid-rich">
+            <div class="panel-card settings-card">
+              <h4>Core Protection</h4>
+              <div class="settings-list">
+                <label class="setting-row setting-row-rich">
+                  <div class="setting-copy">
+                    <span>Protection Engine</span>
+                    <small>Enable scanning and phishing classification</small>
+                  </div>
+                  <span class="switch-ui">
+                    <input id="settingProtection" type="checkbox" checked />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+
+                <label class="setting-row setting-row-rich">
+                  <div class="setting-copy">
+                    <span>Auto Refresh Dashboard</span>
+                    <small
+                      >Refresh active dashboard data every 30 seconds</small
+                    >
+                  </div>
+                  <span class="switch-ui">
+                    <input id="settingAutoRefresh" type="checkbox" checked />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+
+                <label class="setting-row setting-row-rich">
+                  <div class="setting-copy">
+                    <span>Live Threat Alerts</span>
+                    <small
+                      >Show immediate visual alerts for risky detections</small
+                    >
+                  </div>
+                  <span class="switch-ui">
+                    <input id="settingLiveAlerts" type="checkbox" checked />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="panel-card settings-card">
+              <h4>Detection Profile</h4>
+              <p class="settings-card-subtitle">
+                Choose how strict the detection model should be.
+              </p>
+
+              <div class="sensitivity-pills" id="sensitivityPills">
+                <button
+                  class="pill-button"
+                  data-mode="conservative"
+                  type="button"
+                >
+                  <strong>Conservative</strong>
+                  <span>Fewer false positives</span>
+                </button>
+                <button
+                  class="pill-button active"
+                  data-mode="balanced"
+                  type="button"
+                >
+                  <strong>Balanced</strong>
+                  <span>Recommended daily mode</span>
+                </button>
+                <button
+                  class="pill-button"
+                  data-mode="aggressive"
+                  type="button"
+                >
+                  <strong>Aggressive</strong>
+                  <span>Maximum threat capture</span>
+                </button>
+              </div>
+
+              <label class="hidden-sensitivity-select" for="settingSensitivity"
+                >Sensitivity Mode</label
+              >
+              <select id="settingSensitivity" class="time-select hidden-select">
+                <option value="conservative">Conservative</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="aggressive">Aggressive</option>
+              </select>
+            </div>
+
+            <div class="panel-card settings-card settings-card-wide">
+              <h4>Automation and Notifications</h4>
+              <div class="preset-row" id="settingsPresets">
+                <button type="button" class="preset-chip" data-preset="work">
+                  Work Mode
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  data-preset="personal"
+                >
+                  Personal Mode
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  data-preset="fortress"
+                >
+                  Fortress Mode
+                </button>
+              </div>
+
+              <div class="settings-list">
+                <label class="setting-row setting-row-rich">
+                  <div class="setting-copy">
+                    <span>Auto-Block High Risk URLs</span>
+                    <small
+                      >Immediately block detections marked HIGH or
+                      CRITICAL</small
+                    >
+                  </div>
+                  <span class="switch-ui">
+                    <input id="settingAutoBlock" type="checkbox" checked />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+
+                <label class="setting-row setting-row-rich">
+                  <div class="setting-copy">
+                    <span>Notification Sound</span>
+                    <small>Play sound cue for severe events</small>
+                  </div>
+                  <span class="switch-ui">
+                    <input id="settingSound" type="checkbox" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="posture-preview" id="posturePreviewCard">
+                <div class="posture-header">
+                  <span>Security Posture</span>
+                  <strong id="postureLabel">Balanced</strong>
+                </div>
+                <div class="posture-bar">
+                  <div class="posture-fill" id="postureFill"></div>
+                </div>
+                <p id="postureHint" class="posture-hint">
+                  Recommended blend of safety and browsing comfort.
+                </p>
+              </div>
+
+              <div class="settings-actions settings-actions-rich">
+                <button id="saveSettingsBtn" class="primary-button">
+                  Save Settings
+                </button>
+                <span id="settingsStatus" class="settings-status"></span>
+              </div>
+            </div>
+
+            <div class="panel-card settings-card settings-card-wide">
+              <h4>Environment and Service Connectivity</h4>
+              <p class="settings-card-subtitle">
+                Validate backend and model availability before high-volume
+                browsing sessions.
+              </p>
+              <div class="service-check-grid">
+                <article class="service-check-item">
+                  <div>
+                    <h5>Rust API Gateway</h5>
+                    <p>
+                      Primary authenticated API for telemetry and decisions.
+                    </p>
+                  </div>
+                  <span id="serviceApiStatus" class="service-pill"
+                    >Checking</span
+                  >
+                </article>
+                <article class="service-check-item">
+                  <div>
+                    <h5>ML Inference Service</h5>
+                    <p>Real-time phishing model scoring and classification.</p>
+                  </div>
+                  <span id="serviceMlStatus" class="service-pill"
+                    >Checking</span
+                  >
+                </article>
+              </div>
+              <div class="settings-actions settings-actions-rich">
+                <button id="recheckServicesBtn" class="secondary-button">
+                  Recheck Services
+                </button>
+                <span id="serviceCheckStatus" class="settings-status"></span>
+              </div>
+            </div>
           </div>
-          <div class="card-content chart-container">
-            <canvas id="distributionBarChart"></canvas>
+        </section>
+
+        <section id="page-help" class="page-section">
+          <div class="panel-card">
+            <div class="panel-header-row">
+              <h3>Help and Troubleshooting</h3>
+              <input
+                id="helpSearch"
+                class="help-search"
+                type="search"
+                placeholder="Search: health, token, model, export..."
+              />
+            </div>
+            <div class="help-quick-actions">
+              <button
+                type="button"
+                class="help-chip"
+                data-help-target="services"
+              >
+                Service Health
+              </button>
+              <button type="button" class="help-chip" data-help-target="token">
+                Token/Auth
+              </button>
+              <button type="button" class="help-chip" data-help-target="alerts">
+                Alerts
+              </button>
+              <button
+                type="button"
+                class="help-chip"
+                data-help-target="analytics"
+              >
+                Analytics
+              </button>
+            </div>
+            <div class="help-list help-accordion" id="helpAccordion">
+              <article
+                class="help-item"
+                data-tags="manual url check popup analyze"
+              >
+                <button class="help-question" type="button">
+                  <span>How do I run a manual URL check?</span>
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer">
+                  Open the extension popup and use
+                  <strong>Check Current Page</strong>. This sends the active tab
+                  URL to the local API and ML services and returns a live
+                  confidence-based verdict.
+                </div>
+              </article>
+              <article
+                class="help-item"
+                data-tags="offline backend services unreachable health"
+              >
+                <button class="help-question" type="button">
+                  <span>What happens if backend services are offline?</span>
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer">
+                  The dashboard preserves your last successful telemetry
+                  snapshot, marks status as degraded, and resumes live updates
+                  once services become healthy again.
+                </div>
+              </article>
+              <article
+                class="help-item"
+                data-tags="required services ports rust python redis"
+              >
+                <button class="help-question" type="button">
+                  <span
+                    >Which services are required for full functionality?</span
+                  >
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer" data-help-id="services">
+                  Run Rust API on port 8080, Python ML service on port 8000, and
+                  Redis on port 6379 for full threat scoring, queueing, and
+                  analytics ingestion.
+                </div>
+              </article>
+              <article
+                class="help-item"
+                data-tags="token auth unauthorized control plane"
+              >
+                <button class="help-question" type="button">
+                  <span>How do I fix token or authorization errors?</span>
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer" data-help-id="token">
+                  Open the extension popup once to refresh local control-plane
+                  credentials. The dashboard automatically retries token refresh
+                  on 401 responses.
+                </div>
+              </article>
+              <article
+                class="help-item"
+                data-tags="alerts live threat notifications blocked"
+              >
+                <button class="help-question" type="button">
+                  <span>How do live alerts and blocking work?</span>
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer" data-help-id="alerts">
+                  High-confidence risky URLs can be auto-blocked when enabled in
+                  settings. Live alert mode highlights recent threats with
+                  confidence and action data.
+                </div>
+              </article>
+              <article
+                class="help-item"
+                data-tags="analytics trends charts confidence ratio"
+              >
+                <button class="help-question" type="button">
+                  <span>How should I read the analytics page?</span>
+                  <span class="help-chevron"></span>
+                </button>
+                <div class="help-answer" data-help-id="analytics">
+                  Use the time range selector to compare trend velocity, block
+                  ratio, and threat mix. Focus on spikes in high-risk classes
+                  and repeated domains.
+                </div>
+              </article>
+            </div>
+            <p id="helpEmptyHint" class="history-empty-hint"></p>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
 
-    <script src="dashboard.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>

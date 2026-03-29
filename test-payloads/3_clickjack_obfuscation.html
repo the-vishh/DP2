@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Claim your prize!</title>
+</head>
+<body>
+    <h1>Congratulations! You won!</h1>
+    <button>Click here to claim your prize</button>
+    
+    <!-- Phase 4: Clickjacking Overlay -->
+    <div style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; opacity: 0; z-index: 9999; background: transparent;">
+        <!-- Invisible layer to steal clicks -->
+    </div>
+    
+    <!-- Phase 4: Obfuscation Bomb Simulator -->
+    <script>
+        // Massive dummy obfuscation string to trigger AntiEvasion Engine
+        var payload = "A".repeat(9000); 
+        eval("console.log('Obfuscation check 1')");
+        eval("console.log('Obfuscation check 2')");
+        eval("console.log('Obfuscation check 3')");
+        eval("console.log('Obfuscation check 4')");
+        eval("console.log('Obfuscation check 5')");
+        eval("console.log('Obfuscation check 6')");
+    </script>
+</body>
+</html>

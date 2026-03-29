@@ -1,14 +1,16 @@
 /*!
- * Global statistics endpoints
- *
- * NOTE: Temporarily returns mock data while migrating to SQLite
- * TODO: Reimplement with user_activity and user_threat_stats tables
+ * Global and user statistics endpoints
  */
 
 use actix_web::{web, HttpResponse};
+use chrono::{DateTime, Utc};
+use diesel::dsl::avg;
+use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Text};
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::db::schema::{user_activity, users};
 use crate::db::DbPool;
 
 #[derive(Debug, Serialize)]
@@ -57,181 +59,159 @@ pub struct UserStatsResponse {
     pub user_id: Uuid,
     pub total_scans: i32,
     pub threats_blocked: i32,
-    pub last_scan: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_scan: Option<DateTime<Utc>>,
     pub sensitivity_mode: String,
     pub avg_latency_ms: f64,
     pub scans_today: i32,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(QueryableByName)]
+struct TopDomainRow {
+    #[diesel(sql_type = Text)]
+    domain: String,
+    #[diesel(sql_type = BigInt)]
+    count: i64,
 }
 
 /// GET /api/stats/global
-/// Returns aggregated statistics across all users
-/// TEMP: Returns mock data during SQLite migration
-pub async fn get_global_stats(_pool: web::Data<DbPool>) -> HttpResponse {
-    // TODO: Reimplement with user_activity table after SQLite migration complete
-    log::info!("📊 Returning mock global stats (SQLite migration in progress)");
+/// Returns aggregated statistics across all users.
+pub async fn get_global_stats(pool: web::Data<DbPool>) -> HttpResponse {
+    let now = Utc::now().timestamp();
+    let one_hour_ago = now - 3600;
+    let one_day_ago = now - 86400;
+    let one_day_ago_i32 = one_day_ago as i32;
 
-    let mock_stats = GlobalStatsResponse {
-        total_users: 0,
-        active_users: 0,
-        total_scans: 0,
-        threats_blocked: 0,
-        scans_last_hour: 0,
-        scans_last_24h: 0,
-        threats_last_24h: 0,
-        avg_confidence: 0.0,
-        avg_latency_ms: 0.0,
-        model_accuracy: None,
-        model_precision: None,
-        model_recall: None,
-        sensitivity_breakdown: SensitivityBreakdown {
-            conservative: 0,
-            balanced: 0,
-            aggressive: 0,
-        },
-        threat_breakdown: ThreatBreakdown {
-            critical: 0,
-            high: 0,
-            medium: 0,
-            low: 0,
-            safe: 0,
-        },
-        top_phishing_domains: vec![],
-    };
-
-    HttpResponse::Ok().json(mock_stats)
-}
-
-// Old implementation - commented out during SQLite migration
-/*
-pub async fn get_global_stats_OLD(_pool: web::Data<DbPool>) -> HttpResponse {
-    use schema::{users, scans};
-
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(e) => {
-            log::error!("Failed to get DB connection: {}", e);
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Database connection failed"
-            }));
-        }
-    };
-
-    // Query global statistics
     let stats = web::block(move || {
-        // Total users
+        let mut conn = pool.get().map_err(|e| {
+            diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("{}", e)),
+            )
+        })?;
+
         let total_users: i64 = users::table
-            .filter(users::is_active.eq(true))
+            .filter(users::is_active.eq(1))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Active users (last 24h)
         let active_users: i64 = users::table
-            .filter(users::last_active_at.gt(chrono::Utc::now() - chrono::Duration::hours(24)))
+            .filter(users::is_active.eq(1))
+            .filter(users::last_active_at.gt(one_day_ago_i32))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Total scans
-        let total_scans: i64 = scans::table
+        let total_scans: i64 = user_activity::table
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Threats blocked
-        let threats_blocked: i64 = scans::table
-            .filter(scans::is_phishing.eq(true))
+        let threats_blocked: i64 = user_activity::table
+            .filter(user_activity::is_phishing.eq(1))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Scans last hour
-        let scans_last_hour: i64 = scans::table
-            .filter(scans::scanned_at.gt(chrono::Utc::now() - chrono::Duration::hours(1)))
+        let scans_last_hour: i64 = user_activity::table
+            .filter(user_activity::timestamp.gt(one_hour_ago))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Scans last 24h
-        let scans_last_24h: i64 = scans::table
-            .filter(scans::scanned_at.gt(chrono::Utc::now() - chrono::Duration::hours(24)))
+        let scans_last_24h: i64 = user_activity::table
+            .filter(user_activity::timestamp.gt(one_day_ago))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Threats last 24h
-        let threats_last_24h: i64 = scans::table
-            .filter(scans::is_phishing.eq(true))
-            .filter(scans::scanned_at.gt(chrono::Utc::now() - chrono::Duration::hours(24)))
+        let threats_last_24h: i64 = user_activity::table
+            .filter(user_activity::is_phishing.eq(1))
+            .filter(user_activity::timestamp.gt(one_day_ago))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Average confidence
-        let avg_confidence: Option<f64> = scans::table
-            .select(diesel::dsl::avg(scans::confidence))
-            .first(&mut conn)
-            .unwrap_or(None);
+        let avg_confidence = user_activity::table
+            .select(avg(user_activity::confidence))
+            .first::<Option<f64>>(&mut conn)
+            .unwrap_or(None)
+            .unwrap_or(0.0);
 
-        // Average latency
-        let avg_latency: Option<f64> = scans::table
-            .select(diesel::dsl::avg(scans::latency_ms))
-            .first(&mut conn)
-            .unwrap_or(None);
+        let avg_latency_ms = users::table
+            .filter(users::is_active.eq(1))
+            .select(avg(users::average_response_time_ms))
+            .first::<Option<f64>>(&mut conn)
+            .unwrap_or(None)
+            .unwrap_or(0.0);
 
-        // Sensitivity breakdown
-        let conservative_count: i64 = scans::table
-            .filter(scans::sensitivity_mode.eq("conservative"))
+        let conservative: i64 = users::table
+            .filter(users::sensitivity_mode.eq("conservative"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let balanced_count: i64 = scans::table
-            .filter(scans::sensitivity_mode.eq("balanced"))
+        let balanced: i64 = users::table
+            .filter(users::sensitivity_mode.eq("balanced"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let aggressive_count: i64 = scans::table
-            .filter(scans::sensitivity_mode.eq("aggressive"))
+        let aggressive: i64 = users::table
+            .filter(users::sensitivity_mode.eq("aggressive"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Threat breakdown
-        let critical_count: i64 = scans::table
-            .filter(scans::threat_level.eq("CRITICAL"))
+        let critical: i64 = user_activity::table
+            .filter(user_activity::threat_level.eq("CRITICAL"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let high_count: i64 = scans::table
-            .filter(scans::threat_level.eq("HIGH"))
+        let high: i64 = user_activity::table
+            .filter(user_activity::threat_level.eq("HIGH"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let medium_count: i64 = scans::table
-            .filter(scans::threat_level.eq("MEDIUM"))
+        let medium: i64 = user_activity::table
+            .filter(user_activity::threat_level.eq("MEDIUM"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let low_count: i64 = scans::table
-            .filter(scans::threat_level.eq("LOW"))
+        let low: i64 = user_activity::table
+            .filter(user_activity::threat_level.eq("LOW"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        let safe_count: i64 = scans::table
-            .filter(scans::threat_level.eq("SAFE"))
+        let safe: i64 = user_activity::table
+            .filter(user_activity::threat_level.eq("SAFE"))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        // Top phishing domains (TODO: Implement with GROUP BY)
-        let top_domains = vec![];
+        let top_domains_raw = diesel::sql_query(
+            "SELECT encrypted_domain AS domain, COUNT(*) AS count
+             FROM user_activity
+             WHERE is_phishing = 1
+             GROUP BY encrypted_domain
+             ORDER BY count DESC
+             LIMIT 5",
+        )
+        .load::<TopDomainRow>(&mut conn)
+        .unwrap_or_default();
+
+        let top_phishing_domains = top_domains_raw
+            .into_iter()
+            .map(|row| DomainCount {
+                domain: row.domain,
+                count: row.count,
+            })
+            .collect::<Vec<_>>();
 
         Ok::<GlobalStatsResponse, diesel::result::Error>(GlobalStatsResponse {
             total_users: total_users as i32,
@@ -241,146 +221,138 @@ pub async fn get_global_stats_OLD(_pool: web::Data<DbPool>) -> HttpResponse {
             scans_last_hour: scans_last_hour as i32,
             scans_last_24h: scans_last_24h as i32,
             threats_last_24h: threats_last_24h as i32,
-            avg_confidence: avg_confidence.unwrap_or(0.0),
-            avg_latency_ms: avg_latency.unwrap_or(0.0),
-            model_accuracy: None, // TODO: Calculate from model_metrics table
+            avg_confidence,
+            avg_latency_ms,
+            model_accuracy: None,
             model_precision: None,
             model_recall: None,
             sensitivity_breakdown: SensitivityBreakdown {
-                conservative: conservative_count as i32,
-                balanced: balanced_count as i32,
-                aggressive: aggressive_count as i32,
+                conservative: conservative as i32,
+                balanced: balanced as i32,
+                aggressive: aggressive as i32,
             },
             threat_breakdown: ThreatBreakdown {
-                critical: critical_count as i32,
-                high: high_count as i32,
-                medium: medium_count as i32,
-                low: low_count as i32,
-                safe: safe_count as i32,
+                critical: critical as i32,
+                high: high as i32,
+                medium: medium as i32,
+                low: low as i32,
+                safe: safe as i32,
             },
-            top_phishing_domains: top_domains,
+            top_phishing_domains,
         })
     })
     .await;
 
     match stats {
-        Ok(Ok(stats)) => {
-            log::info!("✅ Global stats retrieved: {} users, {} scans",
-                stats.total_users, stats.total_scans);
-            HttpResponse::Ok().json(stats)
-        }
+        Ok(Ok(stats)) => HttpResponse::Ok().json(stats),
         Ok(Err(e)) => {
-            log::error!("❌ Database query error: {}", e);
+            log::error!("❌ Global stats query failed: {}", e);
             HttpResponse::InternalServerError().json(serde_json::json!({
                 "error": "Failed to query statistics"
             }))
         }
         Err(e) => {
-            log::error!("❌ Blocking error: {}", e);
+            log::error!("❌ Global stats blocking error: {}", e);
             HttpResponse::InternalServerError().json(serde_json::json!({
                 "error": "Internal server error"
             }))
         }
     }
 }
-*/
 
 /// GET /api/stats/user/{user_id}
-/// Returns statistics for specific user
-/// TEMP: Returns mock data during SQLite migration
+/// Returns statistics for a specific user.
 pub async fn get_user_stats(
-    _pool: web::Data<DbPool>,
-    user_id: web::Path<Uuid>,
-) -> HttpResponse {
-    let uid = user_id.into_inner();
-    log::info!("📊 Returning mock user stats (SQLite migration in progress)");
-
-    let mock_stats = UserStatsResponse {
-        user_id: uid,
-        total_scans: 0,
-        threats_blocked: 0,
-        last_scan: None,
-        sensitivity_mode: "balanced".to_string(),
-        avg_latency_ms: 0.0,
-        scans_today: 0,
-        created_at: chrono::Utc::now(),
-    };
-
-    HttpResponse::Ok().json(mock_stats)
-}
-
-// Old implementation
-/*
-pub async fn get_user_stats_OLD(
     pool: web::Data<DbPool>,
     user_id: web::Path<Uuid>,
 ) -> HttpResponse {
-    use schema::{users, scans};
-
-    let user_id = user_id.into_inner();
-
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(e) => {
-            log::error!("Failed to get DB connection: {}", e);
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Database connection failed"
-            }));
-        }
-    };
+    let uid = user_id.into_inner();
+    let uid_string = uid.to_string();
+    let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
 
     let stats = web::block(move || {
-        // Get user
-        let user: crate::db::User = users::table
-            .find(user_id)
-            .first(&mut conn)?;
+        let mut conn = pool.get().map_err(|e| {
+            diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("{}", e)),
+            )
+        })?;
 
-        // Get last scan
-        let last_scan: Option<chrono::DateTime<chrono::Utc>> = scans::table
-            .filter(scans::user_id.eq(user_id))
-            .select(scans::scanned_at)
-            .order(scans::scanned_at.desc())
-            .first(&mut conn)
-            .ok();
+        let user_row = users::table
+            .filter(users::user_id.eq(&uid_string))
+            .select((
+                users::sensitivity_mode,
+                users::average_response_time_ms,
+                users::created_at,
+            ))
+            .first::<(String, f64, i32)>(&mut conn)
+            .optional()?;
 
-        // Scans today
-        let scans_today: i64 = scans::table
-            .filter(scans::user_id.eq(user_id))
-            .filter(scans::scanned_at.gt(chrono::Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc()))
+        let Some((sensitivity_mode, avg_latency_ms, created_at_ts)) = user_row else {
+            return Ok::<Option<UserStatsResponse>, diesel::result::Error>(None);
+        };
+
+        let total_scans: i64 = user_activity::table
+            .filter(user_activity::user_id.eq(&uid_string))
             .count()
             .get_result(&mut conn)
             .unwrap_or(0);
 
-        Ok::<UserStatsResponse, diesel::result::Error>(UserStatsResponse {
-            user_id: user.user_id,
-            total_scans: user.total_scans,
-            threats_blocked: user.total_threats_blocked,
+        let threats_blocked: i64 = user_activity::table
+            .filter(user_activity::user_id.eq(&uid_string))
+            .filter(user_activity::is_phishing.eq(1))
+            .count()
+            .get_result(&mut conn)
+            .unwrap_or(0);
+
+        let scans_today: i64 = user_activity::table
+            .filter(user_activity::user_id.eq(&uid_string))
+            .filter(user_activity::timestamp.ge(today_start))
+            .count()
+            .get_result(&mut conn)
+            .unwrap_or(0);
+
+        let last_scan_ts = user_activity::table
+            .filter(user_activity::user_id.eq(&uid_string))
+            .select(user_activity::timestamp)
+            .order(user_activity::timestamp.desc())
+            .first::<i64>(&mut conn)
+            .optional()
+            .unwrap_or(None);
+
+        let last_scan = last_scan_ts.and_then(|ts| DateTime::from_timestamp(ts, 0));
+        let created_at =
+            DateTime::from_timestamp(created_at_ts as i64, 0).unwrap_or_else(Utc::now);
+
+        Ok::<Option<UserStatsResponse>, diesel::result::Error>(Some(UserStatsResponse {
+            user_id: uid,
+            total_scans: total_scans as i32,
+            threats_blocked: threats_blocked as i32,
             last_scan,
-            sensitivity_mode: user.sensitivity_mode,
-            avg_latency_ms: user.average_response_time_ms,
+            sensitivity_mode,
+            avg_latency_ms,
             scans_today: scans_today as i32,
-            created_at: user.created_at,
-        })
+            created_at,
+        }))
     })
     .await;
 
     match stats {
-        Ok(Ok(stats)) => {
-            log::info!("✅ User stats retrieved for {}", user_id);
-            HttpResponse::Ok().json(stats)
-        }
+        Ok(Ok(Some(stats))) => HttpResponse::Ok().json(stats),
+        Ok(Ok(None)) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "User not found"
+        })),
         Ok(Err(e)) => {
-            log::error!("❌ Database query error: {}", e);
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": "User not found"
+            log::error!("❌ User stats query failed: {}", e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": "Failed to query user statistics"
             }))
         }
         Err(e) => {
-            log::error!("❌ Blocking error: {}", e);
+            log::error!("❌ User stats blocking error: {}", e);
             HttpResponse::InternalServerError().json(serde_json::json!({
                 "error": "Internal server error"
             }))
         }
     }
 }
-*/

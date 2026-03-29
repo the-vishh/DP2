@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web3 Airdrop</title>
+</head>
+<body style="font-family: Arial; padding: 50px; text-align: center; background: #0f172a; color: white;">
+    <h1>Claim your 10,000 $USDT Airdrop!</h1>
+    <p>Connect your wallet to claim.</p>
+    <button id="drain-btn" style="padding: 15px 30px; font-size: 18px; background: gold; border-radius: 10px; cursor: pointer; color: black; font-weight: bold;">Connect Wallet & Claim</button>
+    <script>
+        // Directly define window.ethereum without checking, mimicking a real object
+        window.ethereum = {
+            request: async function(args) {
+                console.log("Mock ethereum natively executed:", args);
+                // IF THIS ALERTS, THE HOOK FAILED!
+                alert("íº¨ WEB3 TRANSACTION EXECUTED! The PhishGuard Hook FAILED to intercept this.");
+                return true;
+            }
+        };
+
+        document.getElementById('drain-btn').addEventListener('click', async () => {
+            try {
+                console.log("Dispatching malicious eth_sendTransaction via window.ethereum...");
+                await window.ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        to: '0xMaliciousHackerAddress',
+                        value: '0x1000'
+                    }]
+                });
+            } catch (e) {
+                console.error("Caught error in page (hook succeed?):", e);
+            }
+        });
+    </script>
+</body>
+</html>

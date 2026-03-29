@@ -62,12 +62,13 @@ app.add_middleware(
 
 model_cache = None
 feature_extractor = None
+initialization_error = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize ML models and feature extractor on startup"""
-    global model_cache, feature_extractor
+    global model_cache, feature_extractor, initialization_error
 
     logger.info("Starting ML Service...")
 
@@ -88,11 +89,17 @@ async def startup_event():
         init_time = (time.time() - start) * 1000
         logger.info(f"Feature extractor ready in {init_time:.0f}ms")
 
+        if not model_cache.get_loaded_models():
+            raise RuntimeError("No trained models were loaded from ml-model/models")
+
+        initialization_error = None
         logger.info("ML Service ready!")
 
     except Exception as e:
-        logger.error(f"Failed to initialize ML service: {e}")
-        raise
+        initialization_error = str(e)
+        model_cache = None
+        feature_extractor = None
+        logger.error("ML service startup failed: %s", e)
 
 
 # ============================================================================
@@ -169,11 +176,15 @@ async def health_check():
     if model_cache is None or feature_extractor is None:
         return JSONResponse(
             status_code=503,
-            content={"status": "unhealthy", "message": "ML service not initialized"},
+            content={
+                "status": "unhealthy",
+                "message": initialization_error or "ML service not initialized",
+            },
         )
 
     return {
         "status": "healthy",
+        "mode": "ml",
         "models_loaded": model_cache.get_loaded_models(),
         "feature_extractor": "ready",
         "timestamp": time.time(),
@@ -217,6 +228,12 @@ async def predict_url(request: URLCheckRequest):
 
         threshold = SENSITIVITY_THRESHOLDS.get(sensitivity_mode, 0.50)
         logger.info(f"   Using threshold: {threshold} for {sensitivity_mode} mode")
+
+        if model_cache is None or feature_extractor is None:
+            raise HTTPException(
+                status_code=503,
+                detail="ML models are not loaded. Start service with trained models only.",
+            )
 
         # Extract features
         feature_start = time.time()
@@ -264,7 +281,10 @@ async def predict_url(request: URLCheckRequest):
                 "prediction": result.get("prediction", 1 if is_phishing else 0),
                 "feature_extraction_ms": round(feature_time, 2),
                 "ml_inference_ms": round(prediction_time, 2),
-                "models_used": model_cache.get_loaded_models(),
+                "models_used": result.get(
+                    "models_used",
+                    model_cache.get_loaded_models(),
+                ),
                 "threshold_explanation": f"{sensitivity_mode.capitalize()} mode: blocking URLs with {int(threshold*100)}%+ confidence",
             },
             latency_ms=round(total_latency, 2),
@@ -340,7 +360,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
-        port=8000,
+        port=8888,
         reload=False,  # Set to True for development
         log_level="info",
         access_log=True,

@@ -129,171 +129,213 @@
   /**
    * Show in-page warning overlay
    */
+
   function showInPageWarning(type, data) {
-    // Prevent multiple overlays
-    if (document.getElementById("phishguard-warning-overlay")) {
-      return;
-    }
+    if (document.getElementById('phishguard-warning-overlay')) return;
 
     const warningMessages = {
       IMMEDIATE_PASSWORD_REQUEST: {
-        title: "⚠️ Immediate Password Request Detected",
-        message:
-          "This page is asking for your password unusually quickly. This is a common phishing technique.",
-        recommendation:
-          "Verify the website URL carefully before entering any credentials.",
+        title: 'Immediate Password Request Detected',
+        message: 'This page is aggressively prompting for your password. This indicates a high-threat credential harvesting attempt.',
+        recommendation: 'ABORT ACTION. Verify domain authenticity immediately.',
+        severity: 'CRITICAL'
       },
       RAPID_REDIRECTS: {
-        title: "🔄 Rapid Redirects Detected",
-        message: `This page has redirected ${data.count} times in rapid succession. This is suspicious behavior.`,
-        recommendation:
-          "Close this tab and avoid entering any personal information.",
+        title: 'Suspicious Rapid Redirects Detected',
+        message: 'Network trajectory analysis shows multiple consecutive redirects. Evasion and obfuscation techniques likely active.',
+        recommendation: 'Terminate connection to avoid forced drops or payload injections.',
+        severity: 'HIGH'
       },
       EXTERNAL_FORM_SUBMIT: {
-        title: "🚫 Cross-Origin Form Submission",
-        message: `This form is submitting your data to a different website: ${data.formOrigin}`,
-        recommendation:
-          "This is highly suspicious. Do not submit credentials to external sites.",
+        title: 'Cross-Origin Credential Leak',
+        message: 'Exfiltration detected. Form submission is targeting an unauthorized external endpoint.',
+        recommendation: 'Do NOT submit. Traffic is being routed to an unverified third party.',
+        severity: 'CRITICAL'
       },
       CLIPBOARD_ABUSE: {
-        title: "📋 Excessive Clipboard Access",
-        message: "This page is trying to access your clipboard repeatedly.",
-        recommendation:
-          "Your clipboard may contain sensitive information. Be cautious.",
+        title: 'Excessive Clipboard Interception',
+        message: 'Unauthorized memory access detected. Page is repeatedly attempting to read clipboard contents.',
+        recommendation: 'Purge clipboard. Sensitive data may have been copied.',
+        severity: 'MEDIUM'
       },
+      PHISHING_DETECTED: {
+        title: 'Malicious Phishing Attempt Blocked',
+        message: 'PhishGuard Neural Engine has classified this domain as a severe zero-day phishing threat.',
+        recommendation: 'Close this tab immediately.',
+        severity: 'CRITICAL'
+      },
+      SOCIAL_ENGINEERING_URGENCY: {
+        title: 'NLP Intent Analysis: High Urgency Threat',
+        message: 'In-browser NLP engine detected extreme psychological manipulation and urgency triggers typical of spear-phishing.',
+        recommendation: 'Pause and verify. Do not let artificial urgency force you into a mistake.',
+        severity: 'HIGH'
+      },
+      HOMOGRAPH_ATTACK: {
+        title: 'Cryptographic URL Spoof (Punycode)',
+        message: 'The URL contains Cyrillic or Greek characters disguised as standard English letters to trick you into trusting it.',
+        recommendation: 'Exit site immediately. It is not the real domain.',
+        severity: 'CRITICAL'
+      },
+      OBFUSCATION_BOMB: {
+        title: 'Obfuscated Payload Detected',
+        message: 'Massive blocks of encrypted JavaScript were found, commonly used by exploit kits and advanced phishing to hide their operations.',
+        recommendation: 'Close tab. Code is actively attempting to evade security scanners.',
+        severity: 'HIGH'
+      },
+      HOMOGRAPH_ATTACK: {
+        title: 'Cryptographic URL Spoof (Punycode)',
+        message: 'The URL contains Cyrillic or Greek characters disguised as standard English letters to trick you into trusting it.',
+        recommendation: 'Exit site immediately. It is not the real domain.',
+        severity: 'CRITICAL'
+      },
+      OBFUSCATION_BOMB: {
+        title: 'Obfuscated Payload Detected',
+        message: 'Massive blocks of encrypted JavaScript were found, commonly used by exploit kits and advanced phishing to hide their operations.',
+        recommendation: 'Close tab. Code is actively attempting to evade security scanners.',
+        severity: 'HIGH'
+      },
+      WEB3_WALLET_DRAINER: {
+        title: 'Malicious Web3 Smart Contract',
+        message: 'A Web3 permission hijack (Wallet Drainer or Approval Phishing) was intercepted before signature execution.',
+        recommendation: 'Reject the transaction in your wallet immediately.',
+        severity: 'CRITICAL'
+      },
+      SOCIAL_ENGINEERING_URGENCY: {
+        title: 'NLP Intent Analysis: High Urgency Threat',
+        message: 'In-browser NLP engine detected extreme psychological manipulation and urgency triggers typical of spear-phishing.',
+        recommendation: 'Pause and verify. Do not let artificial urgency force you into a mistake.',
+        severity: 'HIGH'
+      },
+      WEB3_WALLET_DRAINER: {
+        title: 'Malicious Web3 Smart Contract',
+        message: 'A Web3 permission hijack (Wallet Drainer or Approval Phishing) was intercepted before signature execution.',
+        recommendation: 'Reject the transaction in your wallet immediately.',
+        severity: 'CRITICAL'
+      },
+      BRAND_SPOOFING_DETECTED: {
+        title: 'Corporate Brand Spoofing Detected',
+        message: 'This site is masquerading as a trusted brand, but its domain is completely mismatched. This is a severe visual spoofing attack.',
+        recommendation: 'DO NOT ENTER YOUR CREDENTIALS. The visual identity of this page is falsified.',
+        severity: 'CRITICAL'
+      },
+      HOLLOW_DOM_STRUCTURE: {
+        title: 'Anomalous DOM Fingerprint',
+        message: 'Structural fingerprinting reveals a hollow page layout heavily skewed toward data extraction (abnormal input-to-content ratio).',
+        recommendation: 'Page is structurally designed for credential harvesting. Proceed with extreme skepticism.',
+        severity: 'HIGH'
+      },
+      INVISIBLE_IFRAME_OVERLAY: {
+        title: 'Clickjacking Overlay Detected',
+        message: 'A massive, highly transparent invisible layer is placed over this page. Clicking anywhere may result in an unintended credential physical hijack.',
+        recommendation: 'Close this tab immediately. Your clicks are being intercepted.',
+        severity: 'CRITICAL'
+      },
+      BRAND_SPOOFING_DETECTED: {
+        title: 'Corporate Brand Spoofing Detected',
+        message: 'This site is masquerading as a trusted brand, but its domain is completely mismatched. This is a severe visual spoofing attack.',
+        recommendation: 'DO NOT ENTER YOUR CREDENTIALS. The visual identity of this page is falsified.',
+        severity: 'CRITICAL'
+      },
+      HOLLOW_DOM_STRUCTURE: {
+        title: 'Anomalous DOM Fingerprint',
+        message: 'Structural fingerprinting reveals a hollow page layout heavily skewed toward data extraction (abnormal input-to-content ratio).',
+        recommendation: 'Page is structurally designed for credential harvesting. Proceed with extreme skepticism.',
+        severity: 'HIGH'
+      },
+      INVISIBLE_IFRAME_OVERLAY: {
+        title: 'Clickjacking Overlay Detected',
+        message: 'A massive, highly transparent invisible layer is placed over this page. Clicking anywhere may result in an unintended credential physical hijack.',
+        recommendation: 'Close this tab immediately. Your clicks are being intercepted.',
+        severity: 'CRITICAL'
+      }
     };
 
     const warningInfo = warningMessages[type] || {
-      title: "⚠️ Suspicious Activity Detected",
-      message: "This page is exhibiting suspicious behavior.",
-      recommendation: "Proceed with caution.",
+        title: 'Suspicious Telemetry Detected',
+        message: 'Anomalous DOM or network behaviors detected on this site.',
+        recommendation: 'Proceed with extreme caution.',
+        severity: 'MEDIUM'
     };
 
-    const overlay = document.createElement("div");
-    overlay.id = "phishguard-warning-overlay";
-    overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 999999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            animation: fadeIn 0.3s ease-in;
-        `;
+    const overlay = document.createElement('div');
+    overlay.id = 'phishguard-warning-overlay';
+    overlay.style.cssText = 
+        'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;' +
+        'z-index: 2147483647; display: flex; align-items: center; justify-content: center;' +
+        'font-family: Inter, system-ui, -apple-system, sans-serif;' +
+        'background: rgba(4, 6, 10, 0.85); backdrop-filter: blur(24px) saturate(0.6);' +
+        '-webkit-backdrop-filter: blur(24px) saturate(0.6);' +
+        'animation: pg-overlay-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;';
 
-    overlay.innerHTML = `
-            <style>
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes slideIn {
-                    from { transform: translateY(-20px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                #phishguard-warning-box {
-                    animation: slideIn 0.4s ease-out;
-                }
-            </style>
-            <div id="phishguard-warning-box" style="
-                background: white;
-                padding: 40px;
-                border-radius: 16px;
-                max-width: 600px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            ">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="font-size: 64px; margin-bottom: 10px;">${
-                      warningInfo.title.split(" ")[0]
-                    }</div>
-                    <h2 style="margin: 0; color: #dc2626; font-size: 24px;">${warningInfo.title.substring(
-                      2
-                    )}</h2>
-                </div>
+    const isCritical = warningInfo.severity === 'CRITICAL';
+    const themeColor = isCritical ? '#ef4444' : '#f59e0b';
+    const themeColorGlow = isCritical ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)';
+    const themeDarkBg = isCritical ? 'rgba(239, 68, 68, 0.05)' : 'rgba(245, 158, 11, 0.05)';
 
-                <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin-bottom: 20px; border-radius: 4px;">
-                    <p style="margin: 0; color: #991b1b; font-size: 16px; line-height: 1.5;">
-                        ${warningInfo.message}
-                    </p>
-                </div>
+    const headerIcon = isCritical ? 
+        '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="' + themeColor + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 12px ' + themeColorGlow + ');"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>' : 
+        '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="' + themeColor + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 12px ' + themeColorGlow + ');"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
 
-                <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 16px; margin-bottom: 30px; border-radius: 4px;">
-                    <p style="margin: 0; color: #166534; font-size: 14px; line-height: 1.5;">
-                        <strong>💡 Recommendation:</strong> ${
-                          warningInfo.recommendation
-                        }
-                    </p>
-                </div>
-
-                <div style="display: flex; gap: 12px; justify-content: center;">
-                    <button id="phishguard-go-back" style="
-                        padding: 12px 24px;
-                        background: #dc2626;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 16px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    " onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
-                        🛡️ Go Back (Recommended)
-                    </button>
-                    <button id="phishguard-continue" style="
-                        padding: 12px 24px;
-                        background: #6b7280;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 16px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    " onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">
-                        Continue Anyway
-                    </button>
-                </div>
-
-                <div style="margin-top: 20px; text-align: center; font-size: 12px; color: #6b7280;">
-                    Protected by PhishGuard AI
-                </div>
-            </div>
-        `;
+    overlay.innerHTML = 
+        '<style>' +
+            '@keyframes pg-overlay-fade { from { opacity: 0; } to { opacity: 1; } }' +
+            '@keyframes pg-box-intro { from { transform: scale(0.95) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }' +
+            '@keyframes pg-pulse-border { 0% { box-shadow: 0 0 0 0 ' + themeColorGlow + '; } 70% { box-shadow: 0 0 0 15px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }' +
+            '@keyframes pg-scanline { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }' +
+            '#pg-sec-box { position: relative; width: 100%; max-width: 580px; background: rgba(13, 17, 23, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); border-top: 2px solid ' + themeColor + '; padding: 48px; border-radius: 24px; box-shadow: 0 25px 80px rgba(0,0,0,0.8), inset 0 0 40px ' + themeDarkBg + '; animation: pg-box-intro 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; overflow: hidden; color: #e2e8f0; text-align: left; }' +
+            '#pg-sec-box::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, transparent 50%, rgba(255,255,255,0.02) 51%); background-size: 100% 4px; pointer-events: none; z-index: 1; }' +
+            '.pg-scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(to bottom, transparent, ' + themeColorGlow + ', transparent); opacity: 0.1; pointer-events: none; animation: pg-scanline 4s linear infinite; z-index: 2; }' +
+            '.pg-header { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 32px; position: relative; z-index: 10; }' +
+            '.pg-icon-wrap { margin-bottom: 24px; animation: pg-pulse-border 2s infinite; border-radius: 50%; background: ' + themeDarkBg + '; padding: 16px; border: 1px solid rgba(255,255,255,0.05); }' +
+            '.pg-title { font-size: 28px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: -0.5px; line-height: 1.2; text-shadow: 0 0 20px ' + themeColorGlow + '; }' +
+            '.pg-badge { display: inline-block; margin-top: 16px; padding: 6px 16px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; border-radius: 99px; background: ' + themeDarkBg + '; color: ' + themeColor + '; border: 1px solid ' + themeColorGlow + '; box-shadow: 0 0 10px ' + themeColorGlow + '; }' +
+            '.pg-content { position: relative; z-index: 10; display: flex; flex-direction: column; gap: 16px; margin-bottom: 40px; }' +
+            '.pg-panel { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 24px; backdrop-filter: blur(10px); }' +
+            '.pg-panel p { margin: 0; font-size: 15px; line-height: 1.6; color: #94a3b8; }' +
+            '.pg-recommendation { border-left: 3px solid #38bdf8; background: linear-gradient(90deg, rgba(56, 189, 248, 0.05) 0%, transparent 100%); }' +
+            '.pg-recommendation p { color: #f8fafc; }' +
+            '.pg-recommendation strong { color: #38bdf8; font-weight: 600; display: block; margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }' +
+            '.pg-actions { display: flex; gap: 16px; position: relative; z-index: 10; }' +
+            '.pg-btn { flex: 1; padding: 16px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit; }' +
+            '.pg-btn-primary { background: ' + themeColor + '; color: #fff; border: none; box-shadow: 0 4px 15px ' + themeColorGlow + '; }' +
+            '.pg-btn-primary:hover { background: #fff; color: ' + themeColor + '; transform: translateY(-2px); box-shadow: 0 8px 25px ' + themeColorGlow + '; }' +
+            '.pg-btn-secondary { background: transparent; color: #64748b; border: 1px solid rgba(255, 255, 255, 0.1); }' +
+            '.pg-btn-secondary:hover { background: rgba(255, 255, 255, 0.05); color: #94a3b8; }' +
+            '.pg-footer { margin-top: 32px; text-align: center; font-size: 12px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 1.5px; display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; z-index: 10; }' +
+            '.pg-footer span { display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 12px #10b981; animation: pg-pulse-border 2s infinite; }' +
+        '</style>' +
+        '<div id="pg-sec-box">' +
+            '<div class="pg-scan-line"></div>' +
+            '<div class="pg-header">' +
+                '<div class="pg-icon-wrap">' + headerIcon + '</div>' +
+                '<h2 class="pg-title">' + warningInfo.title + '</h2>' +
+                '<span class="pg-badge">' + warningInfo.severity + ' THREAT LEVEL</span>' +
+            '</div>' +
+            '<div class="pg-content">' +
+                '<div class="pg-panel"><p>' + warningInfo.message + '</p></div>' +
+                '<div class="pg-panel pg-recommendation"><p><strong>Action Required</strong> ' + warningInfo.recommendation + '</p></div>' +
+            '</div>' +
+            '<div class="pg-actions">' +
+                '<button id="phishguard-go-back" class="pg-btn pg-btn-primary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Safety Abort</button>' +
+                '<button id="phishguard-continue" class="pg-btn pg-btn-secondary">Bypass Warning</button>' +
+            '</div>' +
+            '<div class="pg-footer"><span></span> PhishGuard Neural Engine Active</div>' +
+        '</div>';
 
     document.body.appendChild(overlay);
 
-    // Button handlers
-    document.getElementById("phishguard-go-back").onclick = () => {
-      overlay.remove();
-      reportToBackground("userAction", {
-        action: "went_back",
-        alertType: type,
-      });
-      window.history.back();
+    document.getElementById('phishguard-go-back').onclick = () => {
+      reportToBackground('userAction', { action: 'went_back', alertType: type });
+      try { window.close(); } catch(e) {}
+      chrome.runtime.sendMessage({ action: "closeCurrentTab" });
     };
 
-    document.getElementById("phishguard-continue").onclick = () => {
+    document.getElementById('phishguard-continue').onclick = () => {
       overlay.remove();
-      reportToBackground("userAction", {
-        action: "continued_anyway",
-        alertType: type,
-      });
+      reportToBackground('userAction', { action: 'continued_anyway', alertType: type });
     };
   }
 
-  // ============================================================================
-  // 1. PASSWORD REQUEST TIMING ANALYSIS
-  // ============================================================================
-
-  /**
-   * Monitor for immediate password requests (< 2 seconds after page load)
-   * Phishing sites often rush users to enter credentials
-   */
   function monitorPasswordRequests() {
     // Check on DOM ready
     if (document.readyState === "loading") {
@@ -759,12 +801,241 @@
   });
 
   // ============================================================================
-  // EXPORT (for testing)
+  
+
+
+  // ============================================================================
+  // PHASE 1: ZERO-DAY VISUAL & DOM LAYOUT ENGINE
+  // ============================================================================
+
+  const VisualEngine = {
+    protectedBrands: {
+      "microsoft": ["microsoft.com", "live.com", "windows.com", "office.com"],
+      "google": ["google.com", "youtube.com", "gmail.com"],
+      "paypal": ["paypal.com", "paypal.me"],
+      "chase": ["chase.com"],
+      "bank of america": ["bankofamerica.com", "bofa.com"],
+      "metamask": ["metamask.io"],
+      "apple": ["apple.com", "icloud.com"]
+    },
+
+    init: function() {
+      if (document.readyState === "complete") {
+        this.runFullScan();
+      } else {
+        window.addEventListener("load", () => setTimeout(() => this.runFullScan(), 1000));
+      }
+    },
+
+    runFullScan: function() {
+      this.detectBrandSpoofing();
+      this.computeDOMFingerprint();
+      this.detectClickjackingLayers();
+    },
+
+    detectBrandSpoofing: function() {
+      const hostname = window.location.hostname.toLowerCase();
+      // bypassed for localhost
+      
+      const pageText = (document.title + " " + document.body.innerText.substring(0, 2000)).toLowerCase();
+      
+      for (const [brand, allowedDomains] of Object.entries(this.protectedBrands)) {
+        if (pageText.includes(brand)) {
+          const isAllowed = allowedDomains.some(d => hostname === d || hostname.endsWith("." + d));
+          if (!isAllowed) {
+            const titleHasBrand = document.title.toLowerCase().includes(brand);
+            const headers = Array.from(document.querySelectorAll('h1, h2')).map(h => h.innerText.toLowerCase());
+            const headerHasBrand = headers.some(h => h.includes(brand));
+            
+            if (titleHasBrand || headerHasBrand) {
+               showInPageWarning("BRAND_SPOOFING_DETECTED", { brand: brand });
+               reportSuspiciousActivity("brand_spoofing", { brand: brand, hostname: hostname });
+               return; 
+            }
+          }
+        }
+      }
+    },
+
+    computeDOMFingerprint: function() {
+      const passwordInputs = document.querySelectorAll('input[type="password"]');
+      if (passwordInputs.length === 0) return;
+
+      const totalTextLen = document.body.innerText.trim().length;
+      const allInputs = document.querySelectorAll('input');
+      const allLinks = document.querySelectorAll('a');
+      
+      let suspiciousScore = 0;
+
+      if (totalTextLen < 300) suspiciousScore += 30;
+      if (allInputs.length > 0 && (totalTextLen / allInputs.length) < 50) suspiciousScore += 25;
+
+      let deadLinks = 0;
+      allLinks.forEach(a => {
+         const href = a.getAttribute("href") || "";
+         if (href === "#" || href.startsWith("javascript:")) deadLinks++;
+      });
+      if (allLinks.length > 0 && (deadLinks / allLinks.length) > 0.5) suspiciousScore += 40;
+      
+      if (suspiciousScore >= 70) {
+         showInPageWarning("HOLLOW_DOM_STRUCTURE", { score: suspiciousScore });
+         reportSuspiciousActivity("hollow_dom", { score: suspiciousScore });
+      }
+    },
+
+    detectClickjackingLayers: function() {
+       const suspiciousNodes = [];
+       const elements = document.querySelectorAll('div, iframe');
+       
+       elements.forEach(node => {
+           const style = window.getComputedStyle(node);
+           const opacity = parseFloat(style.opacity);
+           const zIndex = parseInt(style.zIndex);
+           
+           if ((style.position === 'absolute' || style.position === 'fixed') && (!isNaN(zIndex) && zIndex > 900)) {
+              const rect = node.getBoundingClientRect();
+              const area = rect.width * rect.height;
+              const windowArea = window.innerWidth * window.innerHeight;
+              
+              if (area > windowArea * 0.8) {
+                  if (opacity < 0.1 || style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent') {
+                      suspiciousNodes.push(node);
+                  }
+              }
+           }
+       });
+       
+       if (suspiciousNodes.length > 0) {
+           showInPageWarning("INVISIBLE_IFRAME_OVERLAY", {});
+           reportSuspiciousActivity("clickjacking_layer", { count: suspiciousNodes.length });
+       }
+    }
+  };
+
+  VisualEngine.init();
+
+  // ============================================================================
+  // PHASE 2: LOCAL LLM INTENT & NLP PIPELINE
+  // ============================================================================
+
+  const NLPEngine = {
+    urgencyKeywords: [
+      "urgent", "immediate action required", "24 hours", "suspended", "locked",
+      "restricted", "verify your account", "unauthorized access", "will be closed",
+      "final warning", "action required"
+    ],
+    
+    financialKeywords: [
+      "wallet", "funds", "transfer", "crypto", "bitcoin", "ethereum",
+      "payment", "invoice", "billing", "seed phrase"
+    ],
+
+    init: function() {
+      if (document.readyState === "complete") {
+        this.analyzeIntent();
+      } else {
+        window.addEventListener("load", () => setTimeout(() => this.analyzeIntent(), 1500));
+      }
+    },
+
+    analyzeIntent: function() {
+      const hostname = window.location.hostname;
+      
+      const pageText = document.body.innerText.toLowerCase();
+      
+      let urgencyScore = 0;
+      let financialScore = 0;
+
+      this.urgencyKeywords.forEach(kw => {
+        if (pageText.includes(kw)) urgencyScore++;
+      });
+      
+      this.financialKeywords.forEach(kw => {
+        if (pageText.includes(kw)) financialScore++;
+      });
+
+      if (urgencyScore >= 2 && financialScore >= 1) {
+         const topSites = ["paypal.com", "chase.com", "bankofamerica.com", "wellsfargo.com", "amazon.com"];
+         const isTop = topSites.some(t => hostname === t || hostname.endsWith("." + t));
+         
+         if (!isTop) {
+            showInPageWarning("SOCIAL_ENGINEERING_URGENCY", { score: urgencyScore });
+            reportSuspiciousActivity("nlp_high_urgency", { urgency: urgencyScore, finance: financialScore });
+         }
+      }
+    }
+  };
+
+  NLPEngine.init();
+
+
+  // ============================================================================
+  // PHASE 3: CRYPTOGRAPHIC & DNS FORENSICS
+  // ============================================================================
+
+  const CryptographicEngine = {
+    init: function() {
+      this.detectHomographAttacks();
+    },
+
+    detectHomographAttacks: function() {
+      const hostname = window.location.hostname;
+      const cyrillicRegex = /[\u0400-\u04FF\u0500-\u052F]/;
+      
+      if (hostname.includes('xn--') || (cyrillicRegex.test(hostname) && /[a-z]/i.test(hostname))) {
+        showInPageWarning("HOMOGRAPH_ATTACK", { url: hostname });
+        reportSuspiciousActivity("cryptographic_homograph", { hostname: hostname });
+      }
+    }
+  };
+
+  CryptographicEngine.init();
+
+
+  // ============================================================================
+  // PHASE 4: ANTI-EVASION & SANDBOXING
+  // ============================================================================
+
+  const AntiEvasionEngine = {
+    init: function() {
+      if (document.readyState === "complete") {
+        this.scanForObfuscation();
+      } else {
+        window.addEventListener("load", () => setTimeout(() => this.scanForObfuscation(), 2000));
+      }
+    },
+
+    scanForObfuscation: function() {
+      const scripts = document.querySelectorAll('script:not([src])');
+      let maxBlockSize = 0;
+      let evalCount = 0;
+      
+      scripts.forEach(s => {
+        const text = s.innerText || s.textContent || "";
+        const localEvalMatch = text.match(/eval\s*\(/g);
+        if (localEvalMatch) evalCount += localEvalMatch.length;
+        
+        const denseBlocks = text.split(/\s+/);
+        for (let b of denseBlocks) {
+          if (b.length > maxBlockSize) maxBlockSize = b.length;
+        }
+      });
+      
+      if (maxBlockSize > 8000 || evalCount > 5) {
+         showInPageWarning("OBFUSCATION_BOMB", { maxBlock: maxBlockSize, evalCount: evalCount });
+         reportSuspiciousActivity("anti_evasion_obfuscator", { maxBlock: maxBlockSize, evals: evalCount });
+      }
+    }
+  };
+
+  AntiEvasionEngine.init();
+
+// ============================================================================
+  // EXPORTS
   // ============================================================================
 
   window.PhishGuardContentScript = {
-    state: state,
-    config: CONFIG,
     reportSuspiciousActivity: reportSuspiciousActivity,
   };
-})();
+
+})(); // CLOSE THE IIFE!

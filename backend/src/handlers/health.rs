@@ -13,7 +13,8 @@ pub async fn health_check(data: web::Data<AppState>) -> HttpResponse {
     let mut cache = data.cache.clone();
 
     let redis_status = match cache.health_check().await {
-        Ok(_) => "healthy".to_string(),
+        Ok(true) => "healthy".to_string(),
+        Ok(false) => "disabled".to_string(),
         Err(e) => format!("unhealthy: {}", e),
     };
 

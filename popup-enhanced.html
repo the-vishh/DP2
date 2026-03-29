@@ -1,227 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PhishGuard AI - Your Protection</title>
-    <link rel="stylesheet" href="popup-enhanced.css" />
-  </head>
-  <body>
-    <div class="container">
-      <!-- Header with Real-Time Status -->
-      <header class="site-header">
-        <div class="shield-icon animated-shield">🛡️</div>
-        <div class="site-info">
-          <h1 class="site-title">PhishGuard AI</h1>
-          <p class="site-subtitle" id="protection-status">
-            <span class="status-dot"></span> Protection Active
-          </p>
-        </div>
-        <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
-      </header>
-
-      <!-- Main Stats Dashboard -->
-      <div class="stats-dashboard">
-        <!-- Total Threats Blocked -->
-        <div class="stat-card primary">
-          <div class="stat-icon">🚫</div>
-          <div class="stat-content">
-            <div class="stat-number" id="total-blocked">0</div>
-            <div class="stat-label">Threats Blocked</div>
-            <div class="stat-trend" id="blocked-trend">
-              <span class="trend-icon">📈</span>
-              <span class="trend-text">+0 today</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Activity (Last 24h) -->
-        <div class="stat-card">
-          <div class="stat-icon">⏱️</div>
-          <div class="stat-content">
-            <div class="stat-number" id="scans-24h">0</div>
-            <div class="stat-label">Scans (24h)</div>
-          </div>
-        </div>
-
-        <!-- Processing Speed -->
-        <div class="stat-card">
-          <div class="stat-icon">⚡</div>
-          <div class="stat-content">
-            <div class="stat-number" id="processing-speed">0ms</div>
-            <div class="stat-label">Avg Speed</div>
-            <div class="stat-badge" id="speed-badge">TARGET: &lt;100ms</div>
-          </div>
-        </div>
-
-        <!-- Model Status -->
-        <div class="stat-card">
-          <div class="stat-icon">🤖</div>
-          <div class="stat-content">
-            <div class="stat-number" id="model-version">v1.0.0</div>
-            <div class="stat-label">AI Model</div>
-            <div class="stat-badge success" id="model-status">Up to date</div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishGuard</title>
+  <link rel="stylesheet" href="popup-enhanced.css" />
+</head>
+<body>
+  <div class="pg-container">
+    <header class="pg-header">
+      <div class="pg-brand">
+        <svg class="pg-logo" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+        <div>
+          <h1 class="pg-title">PhishGuard</h1>
+          <div class="pg-status-indicator" id="protection-status">
+            <span class="pg-dot pg-dot-active"></span>
+            <span class="pg-status-text">Active</span>
           </div>
         </div>
       </div>
-
-      <!-- Real-Time Activity Feed -->
-      <div class="activity-section">
-        <div class="section-header">
-          <h3>
-            <span class="section-icon">📡</span>
-            Recent Activity
-            <span class="auto-refresh">(Auto-refresh: 5s)</span>
-          </h3>
-        </div>
-        <div class="activity-feed" id="activity-feed">
-          <div class="activity-item loading">
-            <div class="activity-spinner"></div>
-            <p>Loading your activity...</p>
-          </div>
-        </div>
+      <div class="pg-header-action" title="Settings">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
       </div>
+    </header>
 
-      <!-- Threat Type Distribution -->
-      <div class="threat-section">
-        <div class="section-header">
-          <h3>
-            <span class="section-icon">🎯</span>
-            Your Threat Types
-          </h3>
-        </div>
-        <div class="threat-breakdown" id="threat-breakdown">
-          <div class="threat-type">
-            <div class="threat-label">
-              <span class="threat-icon phishing">🎣</span>
-              Phishing
-            </div>
-            <div class="threat-bar">
-              <div
-                class="threat-fill phishing"
-                style="width: 0%"
-                id="phishing-bar"
-              ></div>
-            </div>
-            <div class="threat-count" id="phishing-count">0</div>
-          </div>
-          <div class="threat-type">
-            <div class="threat-label">
-              <span class="threat-icon malware">🦠</span>
-              Malware
-            </div>
-            <div class="threat-bar">
-              <div
-                class="threat-fill malware"
-                style="width: 0%"
-                id="malware-bar"
-              ></div>
-            </div>
-            <div class="threat-count" id="malware-count">0</div>
-          </div>
-          <div class="threat-type">
-            <div class="threat-label">
-              <span class="threat-icon crypto">💎</span>
-              Cryptojacking
-            </div>
-            <div class="threat-bar">
-              <div
-                class="threat-fill crypto"
-                style="width: 0%"
-                id="crypto-bar"
-              ></div>
-            </div>
-            <div class="threat-count" id="crypto-count">0</div>
-          </div>
-          <div class="threat-type">
-            <div class="threat-label">
-              <span class="threat-icon scam">💰</span>
-              Scams
-            </div>
-            <div class="threat-bar">
-              <div
-                class="threat-fill scam"
-                style="width: 0%"
-                id="scam-bar"
-              ></div>
-            </div>
-            <div class="threat-count" id="scam-count">0</div>
-          </div>
-        </div>
+    <div class="pg-grid">
+      <div class="pg-card pg-card-primary">
+        <div class="pg-card-header">Target Blocked</div>
+        <div class="pg-metric" id="total-blocked">0</div>
+        <div class="pg-sub-metric" id="blocked-trend">0 today</div>
       </div>
-
-      <!-- Device Performance -->
-      <div class="performance-section">
-        <div class="section-header">
-          <h3>
-            <span class="section-icon">💻</span>
-            Device Performance
-          </h3>
-        </div>
-        <div class="performance-grid">
-          <div class="perf-item">
-            <div class="perf-label">Database</div>
-            <div class="perf-value" id="db-status">
-              <span class="status-icon">✅</span>
-              <span id="db-size">0 MB</span>
-            </div>
-          </div>
-          <div class="perf-item">
-            <div class="perf-label">Cache Hit Rate</div>
-            <div class="perf-value" id="cache-rate">0%</div>
-          </div>
-          <div class="perf-item">
-            <div class="perf-label">Memory Usage</div>
-            <div class="perf-value" id="memory-usage">0 MB</div>
-          </div>
-          <div class="perf-item">
-            <div class="perf-label">Scan Queue</div>
-            <div class="perf-value" id="scan-queue">0 pending</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Threat Sources (Geographic) -->
-      <div class="geographic-section">
-        <div class="section-header">
-          <h3>
-            <span class="section-icon">🌍</span>
-            Top Threat Sources
-          </h3>
-        </div>
-        <div class="threat-sources" id="threat-sources">
-          <div class="source-item loading">
-            <p>Loading geographic data...</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="actions-section">
-        <button class="action-btn primary" id="check-current-url">
-          <span class="btn-icon">🔍</span>
-          Check Current Page
-        </button>
-        <button class="action-btn" id="view-full-dashboard">
-          <span class="btn-icon">📊</span>
-          Full Dashboard
-        </button>
-        <button class="action-btn" id="export-data">
-          <span class="btn-icon">📥</span>
-          Export Data
-        </button>
-      </div>
-
-      <!-- Privacy & Encryption Status -->
-      <div class="privacy-footer">
-        <div class="encryption-badge">
-          <span class="lock-icon">🔒</span>
-          <span>End-to-End Encrypted (AES-256-GCM)</span>
-        </div>
-        <div class="last-update" id="last-update">Last updated: Just now</div>
+      
+      <div class="pg-card">
+        <div class="pg-card-header">Avg Latency</div>
+        <div class="pg-metric" id="processing-speed">0ms</div>
+        <div class="pg-sub-metric">P95 &lt; 50ms</div>
       </div>
     </div>
 
-    <script src="popup-enhanced.js"></script>
-  </body>
+    <div class="pg-section">
+      <h2 class="pg-section-title">Telemetry Activity</h2>
+      <div class="pg-feed" id="activity-feed">
+        <div class="pg-loader"></div>
+      </div>
+    </div>
+
+    <div class="pg-action-group">
+      <button class="pg-btn pg-btn-primary" id="view-full-dashboard">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+        Open Workspace
+      </button>
+    </div>
+
+    <footer class="pg-footer">
+      <div class="pg-footer-status">
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        E2E Encrypted (AES-GCM)
+      </div>
+      <div id="last-update">Syncing...</div>
+    </footer>
+  </div>
+  <script src="popup-enhanced.js"></script>
+</body>
 </html>

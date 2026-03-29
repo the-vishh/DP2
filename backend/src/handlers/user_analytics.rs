@@ -3,9 +3,13 @@
 
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use diesel::prelude::*;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use std::env;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 use crate::db::DbPool;
 use crate::db::models_analytics::*;
@@ -52,13 +56,59 @@ pub struct LogActivityRequest {
     pub threat_level: Option<String>,
     pub confidence: f64,
     pub action_taken: String,
-    pub client_ip: Option<String>,  // NEW: For GeoIP lookup
+    pub client_ip: Option<String>,
+    pub request_nonce: String,
+    pub client_timestamp: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserAnalyticsQuery {
+    pub limit: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct LogActivityResponse {
     pub success: bool,
     pub activity_id: String,
+}
+
+const REPLAY_WINDOW_SECONDS: i64 = 300;
+static RECENT_NONCES: Lazy<Mutex<HashMap<String, i64>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn validate_activity_request(req: &LogActivityRequest) -> Result<(), String> {
+    if req.encrypted_url.trim().is_empty() || req.encrypted_url.len() > 8192 {
+        return Err("Invalid encrypted_url payload size".to_string());
+    }
+    if req.encrypted_url_hash.len() != 64 {
+        return Err("encrypted_url_hash must be 64 hex chars".to_string());
+    }
+    if req.domain.trim().is_empty() || req.domain.len() > 255 {
+        return Err("Invalid domain value".to_string());
+    }
+    if !(0.0..=1.0).contains(&req.confidence) {
+        return Err("confidence must be between 0.0 and 1.0".to_string());
+    }
+    if !req
+        .encrypted_url_hash
+        .chars()
+        .all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("encrypted_url_hash must be hex".to_string());
+    }
+    if req.request_nonce.trim().len() < 16 || req.request_nonce.len() > 128 {
+        return Err("request_nonce length must be between 16 and 128".to_string());
+    }
+    if !matches!(req.action_taken.as_str(), "blocked" | "warned" | "allowed") {
+        return Err("action_taken must be one of blocked, warned, allowed".to_string());
+    }
+
+    let now = Utc::now().timestamp();
+    if (now - req.client_timestamp).abs() > REPLAY_WINDOW_SECONDS {
+        return Err("client_timestamp outside allowed replay window".to_string());
+    }
+
+    Ok(())
 }
 
 // ==========================================
@@ -70,9 +120,12 @@ pub struct LogActivityResponse {
 pub async fn get_user_analytics(
     pool: web::Data<DbPool>,
     user_id_path: web::Path<Uuid>,
+    query: web::Query<UserAnalyticsQuery>,
 ) -> ActixResult<HttpResponse> {
     let user_id = user_id_path.to_string(); // Convert Uuid to String for SQLite
     let user_id_for_response = user_id.clone(); // Clone for use outside closure
+    let requested_limit = query.limit.unwrap_or(100);
+    let activity_limit = requested_limit.clamp(20, 500);
 
     let result = web::block(move || {
         let mut conn = pool.get().map_err(|e| {
@@ -86,7 +139,7 @@ pub async fn get_user_analytics(
         let activities: Vec<UserActivity> = user_activity::table
             .filter(user_activity::user_id.eq(&user_id))
             .order(user_activity::timestamp.desc())
-            .limit(20)
+            .limit(activity_limit)
             .select(UserActivity::as_select())
             .load(&mut conn)?;
 
@@ -163,8 +216,37 @@ pub async fn log_activity(
     let user_id = user_id_path.to_string(); // Convert to String for SQLite
     let req = request.into_inner();
 
+    if let Err(message) = validate_activity_request(&req) {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": message
+        })));
+    }
+
+    {
+        let now = Utc::now().timestamp();
+        let replay_key = format!("{}:{}", user_id, req.request_nonce);
+        let mut nonce_store = RECENT_NONCES.lock().expect("nonce mutex poisoned");
+
+        nonce_store.retain(|_, ts| now - *ts <= REPLAY_WINDOW_SECONDS);
+
+        if nonce_store.contains_key(&replay_key) {
+            return Ok(HttpResponse::Conflict().json(serde_json::json!({
+                "error": "duplicate_request_nonce"
+            })));
+        }
+
+        nonce_store.insert(replay_key, now);
+    }
+
+    let allow_client_ip = env::var("ALLOW_CLIENT_IP_ANALYTICS")
+        .ok()
+        .map(|value| value.eq_ignore_ascii_case("true") || value == "1")
+        .unwrap_or(false);
+
+    let client_ip_for_lookup = if allow_client_ip { req.client_ip.clone() } else { None };
+
     // 🌍 GeoIP Lookup (if IP provided and GeoIP available)
-    let country_info = if let (Some(ip_str), Some(geoip)) = (&req.client_ip, &app_state.geoip) {
+    let country_info = if let (Some(ip_str), Some(geoip)) = (&client_ip_for_lookup, &app_state.geoip) {
         if let Ok(ip) = ip_str.parse() {
             geoip.lookup_country(ip)
         } else {
@@ -197,7 +279,7 @@ pub async fn log_activity(
             threat_level: req.threat_level.clone().unwrap_or_else(|| "unknown".to_string()),
             confidence: Some(req.confidence),
             action_taken: req.action_taken,
-            encryption_nonce: "".to_string(),  // TODO: Add nonce field to request
+            encryption_nonce: req.request_nonce,
         };
 
         let activity: UserActivity = diesel::insert_into(user_activity::table)

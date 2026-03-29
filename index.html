@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PhishGuard Test Environment</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 800px; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #334155; }
+        h1 { color: #38bdf8; text-align: center; margin-bottom: 30px; }
+        .test-card { background: #0f172a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #38bdf8; transition: transform 0.2s; }
+        .test-card:hover { transform: translateX(5px); }
+        h3 { color: #f1f5f9; margin-top: 0; }
+        p { color: #94a3b8; line-height: 1.5; }
+        a { display: inline-block; background: #0ea5e9; color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; margin-top: 10px; }
+        a:hover { background: #0284c7; }
+        .port-info { background: #1e293b; border: 1px dashed #475569; padding: 15px; border-radius: 8px; margin-bottom: 30px; text-align: center; }
+        .port-info span { color: #10b981; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PhishGuard Test Environment</h1>
+        
+        <div class="port-info">
+            Backend Gateway: <span>localhost:8080</span> &nbsp;|&nbsp; ML Service: <span>localhost:8000</span>
+        </div>
+
+        <div class="test-card" style="border-left-color: #ef4444;">
+            <h3>Phase 1: Visual & Layout Spoofing</h3>
+            <p>Simulates a fake Microsoft login page with invisible overlays to trigger layout anomaly detection.</p>
+            <a href="/test-payloads/1_visual_spoof.html" target="_blank">Test Phase 1</a>
+        </div>
+
+        <div class="test-card" style="border-left-color: #f59e0b;">
+            <h3>Phase 2: Social Engineering & NLP</h3>
+            <p>Simulates maximum urgency spear-phishing with financial keywords that the local LLM intent engine will flag.</p>
+            <a href="/test-payloads/2_nlp_spear_phishing.html" target="_blank">Test Phase 2</a>
+        </div>
+
+        <div class="test-card" style="border-left-color: #a855f7;">
+            <h3>Phase 3 & 4: Cryptographic & Obfuscation</h3>
+            <p>A simulated highly-obfuscated script block accompanied by homograph attacks triggering the anti-evasion sandbox.</p>
+            <a href="/test-payloads/3_clickjack_obfuscation.html" target="_blank">Test Phase 3 & 4</a>
+        </div>
+
+        
+    </div>
+</body>
+</html>

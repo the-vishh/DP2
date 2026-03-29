@@ -12,18 +12,34 @@ use crate::models::URLCheckResponse;
 /// Redis cache service for storing URL check results
 #[derive(Clone)]
 pub struct CacheService {
-    client: ConnectionManager,
+    client: Option<ConnectionManager>,
 }
 
 impl CacheService {
     /// Create new cache service
     pub async fn new(redis_url: &str) -> Result<Self> {
-        let client = Client::open(redis_url)?;
-        let manager = ConnectionManager::new(client).await?;
+        let client = match Client::open(redis_url) {
+            Ok(client) => client,
+            Err(e) => {
+                log::warn!("⚠️ Redis client init failed, running without cache: {}", e);
+                return Ok(Self { client: None });
+            }
+        };
 
-        Ok(Self {
-            client: manager,
-        })
+        match ConnectionManager::new(client).await {
+            Ok(manager) => Ok(Self {
+                client: Some(manager),
+            }),
+            Err(e) => {
+                log::warn!("⚠️ Redis connection failed, running without cache: {}", e);
+                Ok(Self { client: None })
+            }
+        }
+    }
+
+    /// Whether Redis caching is enabled
+    pub fn is_enabled(&self) -> bool {
+        self.client.is_some()
     }
 
     /// Generate cache key from URL
@@ -36,9 +52,13 @@ impl CacheService {
 
     /// Get cached result for URL
     pub async fn get(&mut self, url: &str) -> Result<Option<URLCheckResponse>> {
+        let Some(client) = self.client.as_mut() else {
+            return Ok(None);
+        };
+
         let key = Self::cache_key(url);
 
-        let result: Option<String> = self.client.get(&key).await?;
+        let result: Option<String> = client.get(&key).await?;
 
         match result {
             Some(json) => {
@@ -55,10 +75,14 @@ impl CacheService {
 
     /// Store result in cache
     pub async fn set(&mut self, url: &str, response: &URLCheckResponse, ttl_seconds: usize) -> Result<()> {
+        let Some(client) = self.client.as_mut() else {
+            return Ok(());
+        };
+
         let key = Self::cache_key(url);
         let json = serde_json::to_string(response)?;
 
-        let _: () = self.client.set_ex(&key, json, ttl_seconds as u64).await?;
+        let _: () = client.set_ex(&key, json, ttl_seconds as u64).await?;
 
         log::debug!("💾 Cached result for URL: {} (TTL: {}s)", url, ttl_seconds);
         Ok(())
@@ -66,8 +90,12 @@ impl CacheService {
 
     /// Check if Redis is healthy
     pub async fn health_check(&mut self) -> Result<bool> {
+        let Some(client) = self.client.as_mut() else {
+            return Ok(false);
+        };
+
         // Try a simple GET operation instead of PING
-        let _: Option<String> = self.client.get("__health_check__").await?;
+        let _: Option<String> = client.get("__health_check__").await?;
         Ok(true)
     }
 

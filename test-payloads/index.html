@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PhishGuard Test Suite</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: white; padding: 50px; text-align: center; }
+        h1 { color: #38bdf8; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 800px; margin: 40px auto; }
+        a { display: block; background: #1e293b; padding: 30px; border-radius: 12px; text-decoration: none; color: white; border: 1px solid #334155; transition: all 0.2s; }
+        a:hover { background: #334155; border-color: #38bdf8; transform: translateY(-3px); }
+        .tag { font-size: 12px; background: #ef4444; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>PhishGuard 5-Phase Test Suite</h1>
+    <p>Click any card below to launch a dummy malicious payload and verify the extension catches it.</p>
+    
+    <div class="grid">
+        <a href="1_visual_spoof.html">
+            <span class="tag">PHASE 1</span>
+            <h2>Visual Brand Spoofing</h2>
+            <p>Fake PayPal Login Page on untrusted domain.</p>
+        </a>
+        <a href="2_nlp_spear_phishing.html">
+            <span class="tag">PHASE 2</span>
+            <h2>NLP Spear Phishing</h2>
+            <p>Trigger High-Urgency semantic engine.</p>
+        </a>
+        <a href="3_clickjack_obfuscation.html">
+            <span class="tag">PHASE 4</span>
+            <h2>Evasion & Clickjacking</h2>
+            <p>Invisible Iframe Overlays & Massive Obfuscation.</p>
+        </a>
+        <a href="4_web3_drainer.html">
+            <span class="tag">PHASE 5</span>
+            <h2>Web3 Wallet Drainer</h2>
+            <p>Malicious eth_sendTransaction intercept.</p>
+        </a>
+    </div>
+</body>
+</html>
