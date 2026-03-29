@@ -1,750 +1,788 @@
-# PhishGuard AI - Comprehensive Technical Documentation
+# PhishGuard AI
 
-This document is the canonical, code-accurate guide for the current `DP2` repository.
-It covers architecture, setup, runtime behavior, APIs, data flow, testing, troubleshooting,
-and known limitations based on what is actually implemented in source.
+Production-grade phishing defense platform built as a Chrome Extension + Rust API Gateway + Python ML Inference Service.
+
+This repository is the DP2 workspace for the Intellithon 2025 project and includes:
+
+- Browser-side real-time threat monitoring
+- Backend token-gated API and analytics persistence
+- ML inference with ensemble models and engineered features
+- Operator dashboard and test harness payloads
 
 ---
 
 ## Table of Contents
 
-1. [Project Summary](#project-summary)
-2. [Current Detection Scope](#current-detection-scope)
-3. [System Architecture](#system-architecture)
-4. [Repository Structure](#repository-structure)
-5. [Chrome Extension Layer](#chrome-extension-layer)
-6. [Rust API Gateway Layer](#rust-api-gateway-layer)
-7. [ML Service Layer (FastAPI)](#ml-service-layer-fastapi)
-8. [ML Model Layer](#ml-model-layer)
-9. [Security and Privacy Model](#security-and-privacy-model)
-10. [Database and Analytics Model](#database-and-analytics-model)
-11. [Configuration Reference](#configuration-reference)
-12. [End-to-End Data Flow](#end-to-end-data-flow)
-13. [Local Setup (Windows / Git Bash)](#local-setup-windows--git-bash)
-14. [Running the Full Stack](#running-the-full-stack)
-15. [Testing with Dummy Payloads](#testing-with-dummy-payloads)
-16. [API Reference](#api-reference)
-17. [Scripts and Utilities in Root](#scripts-and-utilities-in-root)
-18. [Known Mismatches and Limitations](#known-mismatches-and-limitations)
-19. [Troubleshooting Guide](#troubleshooting-guide)
-20. [Recommended Next Cleanup Steps](#recommended-next-cleanup-steps)
+1. [Project Overview](#project-overview)
+2. [What This System Detects](#what-this-system-detects)
+3. [High-Level Architecture](#high-level-architecture)
+4. [Component Deep Dive](#component-deep-dive)
+5. [Data and Control Flows](#data-and-control-flows)
+6. [API Contracts](#api-contracts)
+7. [Database and Analytics Model](#database-and-analytics-model)
+8. [Machine Learning Pipeline](#machine-learning-pipeline)
+9. [Repository Structure](#repository-structure)
+10. [Local Development Runbook](#local-development-runbook)
+11. [Testing and Validation](#testing-and-validation)
+12. [Security and Privacy Notes](#security-and-privacy-notes)
+13. [Performance Notes](#performance-notes)
+14. [Known Gaps and Technical Debt](#known-gaps-and-technical-debt)
+15. [Troubleshooting Guide](#troubleshooting-guide)
+16. [Operational Scripts and Patch Utilities](#operational-scripts-and-patch-utilities)
+17. [Contribution Guidelines](#contribution-guidelines)
+18. [License](#license)
 
 ---
 
-## Project Summary
+## Project Overview
 
-PhishGuard AI is a multi-layer phishing defense system made of:
+PhishGuard AI is an end-to-end phishing detection system with three cooperating layers:
 
-- A Chrome Extension (Manifest V3) for client-side behavior and page analysis
-- A Rust API gateway (Actix Web) for auth, routing, caching, analytics writes, and service health
-- A Python FastAPI ML inference service for URL classification
-- A feature/model package under `ml-model` used by the inference service
-- A SQLite analytics store (with optional Redis cache)
+- **Extension Layer (Chrome Manifest V3)**
+  - Injects real-time client-side detectors into pages
+  - Monitors network behavior, fingerprinting, and suspicious DOM/UX patterns
+  - Surfaces in-page warnings and tracks telemetry
+- **Gateway Layer (Rust, Actix-Web)**
+  - Serves as a local API facade for extension clients
+  - Enforces local API token auth (control plane bootstrap + rotation)
+  - Routes URL scoring requests to the Python ML service
+  - Persists user analytics and threat events to SQLite
+- **ML Layer (Python, FastAPI)**
+  - Performs URL feature extraction and model inference
+  - Supports sensitivity-aware classification thresholds
+  - Returns detailed confidence and timing metrics
 
-The extension performs in-browser detections and can call backend ML checks.
-The dashboard and popup consume backend analytics and health telemetry.
-
----
-
-## Current Detection Scope
-
-As currently implemented in `content_script.js`, the active high-level engines are:
-
-- Phase 1: Visual and DOM spoofing checks
-- Phase 2: NLP urgency/social engineering heuristics
-- Phase 3: Homograph/punycode URL checks
-- Phase 4: Obfuscation and anti-evasion checks
-
-Important current-state note:
-
-- The active Web3 interception engine has been removed from runtime detection flow.
-- A legacy test file `test-payloads/4_web3_drainer.html` may still exist for historical testing,
-  but there is no active Phase 5 runtime engine in `content_script.js`.
+The system is designed for low-latency local operation and transparent risk visibility in the dashboard.
 
 ---
 
-## System Architecture
+## What This System Detects
 
-```text
-Browser Tab
-  -> content_script.js / fingerprint_detector.js / network_monitor.js
-  -> background.js (service worker)
-  -> Rust API Gateway (http://localhost:8080)
-       -> Redis cache (optional)
-       -> SQLite (backend/phishguard.db)
-       -> Python ML service (ML_SERVICE_URL, typically http://127.0.0.1:8888 in current .env)
-            -> ml-model/deployment + ml-model/features + model pickle files
-```
+### Extension-side detection domains
 
-Control-plane token flow:
+1. **Behavioral and UX phishing patterns**
+   - Immediate password prompts
+   - Cross-origin credential form posts
+   - Auto-submit forms
+   - Redirect bursts
+   - Clipboard abuse
 
-- Extension bootstraps token using `/api/control-plane/bootstrap`
-- Background stores token in `chrome.storage.local` (`localApiToken`)
-- Protected API calls include `X-PhishGuard-Token`
-- 401 triggers background token rotation/refresh logic
+2. **Visual/DOM spoofing patterns**
+   - Brand spoofing on non-official domains
+   - Hollow credential-harvesting DOM structures
+   - Clickjacking overlays
+
+3. **Cryptographic/evasion indicators**
+   - Homograph/punycode-like URL patterns
+   - Inline-script obfuscation bombs
+
+4. **Network and protocol abuse**
+   - C2-like URL/IP/port patterns
+   - Excessive exfiltration-size POSTs
+   - Suspicious WebSocket and DoH-like traffic indicators
+
+5. **Fingerprinting behavior**
+   - Canvas/WebGL probing
+   - Audio context abuse
+   - Font enumeration patterns
+   - High navigator/storage probing density
+
+### Backend/ML detection domains
+
+- URL classification using model ensemble confidence
+- Sensitivity-mode thresholds (`conservative`, `balanced`, `aggressive`)
+- Persistent analytics aggregation per user and globally
 
 ---
 
-## Repository Structure
+## High-Level Architecture
 
-```text
-DP2/
-  manifest.json
-  background.js
-  content_script.js
-  fingerprint_detector.js
-  network_monitor.js
-  popup-enhanced.html
-  popup-enhanced.css
-  popup-enhanced.js
-  dashboard.html
-  app.js
-  style.css
-  chart.min.js
-  index.html
+```mermaid
+flowchart LR
+    subgraph Browser[Chrome Browser]
+        CS[Content Scripts\ncontent_script.js\nfingerprint_detector.js\nnetwork_monitor.js]
+        BG[Service Worker\nbackground.js]
+        UI[Popup + Dashboard\npopup-enhanced.html\ndashboard.html]
+    end
 
-  backend/
-    .env
-    .env.example
-    Cargo.toml
-    migrations/
-    src/
-      main.rs
-      handlers/
-      middleware/
-      services/
-      db/
-      models/
-      crypto/
+    CS -->|runtime messages| BG
+    UI -->|X-PhishGuard-Token| API
+    BG -->|POST /api/check-url| API
+    BG -->|POST /api/user/:id/activity| API
 
-  ml-service/
-    app.py
-    requirements.txt
-    README.md
+    subgraph Gateway[Rust API Gateway :8080]
+        API[Actix Web API]
+        AUTH[API Auth Middleware\nControl-plane token validation]
+        RL[Rate Limit Middleware]
+        CACHE[Redis Cache Service]
+        DB[(SQLite via Diesel)]
+    end
 
-  ml-model/
-    requirements.txt
-    README.md
-    deployment/
-    features/
-    models/
+    API --> AUTH
+    API --> RL
+    API --> CACHE
+    API --> DB
+    API -->|POST /api/predict| ML
 
-  test-payloads/
-    index.html
-    1_visual_spoof.html
-    2_nlp_spear_phishing.html
-    3_clickjack_obfuscation.html
-    4_web3_drainer.html
+    subgraph Inference[Python ML Service]
+        ML[FastAPI app.py :8888 default\n/api/predict]
+        FE[ProductionFeatureExtractor\nUltimateFeatureIntegrator]
+        MODELS[ModelCache\nLightGBM + XGBoost]
+    end
+
+    ML --> FE
+    ML --> MODELS
 ```
 
 ---
 
-## Chrome Extension Layer
+## Component Deep Dive
 
-### 1) Manifest and injection
+## Extension Surface
 
-File: `manifest.json`
+### Manifest and permissions
 
-- Manifest version: 3
-- Default popup: `popup-enhanced.html`
-- Background service worker: `background.js` (module)
-- Content scripts (all URLs, document_start, all frames):
-  - `content_script.js`
-  - `fingerprint_detector.js`
-  - `network_monitor.js`
-- Permissions:
-  - `tabs`
-  - `activeTab`
+**Source:** `manifest.json`
+
+- Manifest V3 service worker architecture
+- Content scripts injected on `<all_urls>` at `document_start`
+- Key permissions:
+  - `tabs`, `activeTab`
   - `storage`
   - `webRequest`
   - `notifications`
 
-### 2) Background service worker
+### Core extension modules
 
-File: `background.js`
+| File                      | Role                                          | Key behaviors                                                                                          |
+| ------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `background.js`           | Service worker control plane                  | Token bootstrap/rotation, ML request orchestration, analytics logging, blacklist/state persistence     |
+| `content_script.js`       | Behavioral/DOM detectors + in-page warning UI | Form/redirect/password heuristics, visual/NLP/homograph/obfuscation scans, Safety Abort overlay action |
+| `fingerprint_detector.js` | Browser fingerprinting detector               | Hooks canvas, WebGL, Audio, font checks, storage/nav probing                                           |
+| `network_monitor.js`      | Network abuse detector                        | Detects suspicious patterns, exfiltration-size uploads, C2 indicators                                  |
+| `popup-enhanced.js`       | Popup telemetry panel                         | Lightweight status and recent activity feed                                                            |
+| `app.js`                  | Full dashboard logic                          | Metrics fetching, chart rendering, history filters, settings persistence                               |
 
-Core responsibilities:
+### Dashboard UX pages
 
-- Bootstraps and rotates control-plane API tokens
-- Proxies ML URL checks via backend (`/api/check-url`)
-- Logs user activity to analytics endpoint (`/api/user/{user_id}/activity`)
-- Tracks blacklists and local threat telemetry
-- Handles cross-script messages and tab-close command (`closeCurrentTab`)
-- Persists extension runtime state to storage every 10 seconds
+- `dashboard.html`: Multi-page app with Dashboard/History/Analytics/Settings/Help sections
+- `popup-enhanced.html`: Compact quick-view status and activity panel
 
-Configured backend URLs:
+## Rust Gateway
 
-- `ML_API_URL = http://localhost:8080/api/check-url`
-- `ANALYTICS_API_URL = http://localhost:8080/api/user`
-- `CONTROL_PLANE_BOOTSTRAP_URL = http://localhost:8080/api/control-plane/bootstrap`
-- `CONTROL_PLANE_ROTATE_URL = http://localhost:8080/api/control-plane/rotate`
+### Main server
 
-### 3) Content behavioral engine
+**Source:** `backend/src/main.rs`
 
-File: `content_script.js`
+Startup responsibilities:
 
-Core detections include:
+1. Load env/config
+2. Initialize Redis cache client (optional)
+3. Initialize ML HTTP client
+4. Initialize optional GeoIP DB (`geodb/GeoLite2-City.mmdb`)
+5. Initialize SQLite pool (fallback in-memory mode if unavailable)
+6. Ensure control-plane credential table exists
+7. Register middleware + routes and bind host/port
 
-- Immediate password prompt timing
-- Rapid redirects
-- Cross-origin credential form submission
-- Suspicious form params
-- Suspicious input focus timing
-- Clipboard abuse
-- Popup abuse and auto-submit checks
+### Middleware model
 
-Overlay behavior:
+**Source:**
 
-- Shows full-screen warning overlays for high-risk events
-- Safety Abort button requests immediate tab close via background action `closeCurrentTab`
-
-Additional phase engines (active):
-
-- Visual brand spoofing and hollow DOM checks
-- NLP urgency and financial coercion checks
-- Homograph/punycode checks
-- Script obfuscation/eval bomb checks
-
-### 4) Fingerprinting monitor
-
-File: `fingerprint_detector.js`
-
-Monitors and scores:
-
-- Canvas fingerprinting
-- WebGL parameter probing
-- Audio fingerprinting
-- Font probing
-- Storage abuse
-- Navigator/screen/battery fingerprint vectors
-
-### 5) Network monitor
-
-File: `network_monitor.js`
-
-Monitors:
-
-- Large POST uploads
-- C2-style URL and port patterns
-- WebSocket volume
-- DNS-over-HTTPS endpoints
-- suspicious request headers
-- Cross-origin request behavior
-
-### 6) Popup UX
-
-Files:
-
-- `popup-enhanced.html`
-- `popup-enhanced.js`
-- `popup-enhanced.css`
+- `backend/src/middleware/api_auth.rs`
+- `backend/src/middleware/rate_limit.rs`
 
 Behavior:
 
-- Shows quick status, blocked count, and a short recent activity feed
-- Polls backend health and user analytics periodically
-- Opens full dashboard tab (`dashboard.html`)
+- `bootstrap` endpoint is exempt from token checks
+- Non-bootstrap `/api/*` requires `X-PhishGuard-Token` (or `token` query fallback)
+- Rate limiting is route-bucketed:
+  - default: 120 req/min
+  - `/api/check-url`: 90 req/min
+  - `/api/user/:id/activity` POST: 60 req/min
+- Request body max enforced at 64KB
 
-### 7) Dashboard UX
+### Control-plane credential lifecycle
 
-Files:
+**Source:** `backend/src/handlers/control_plane.rs`
 
-- `dashboard.html`
-- `app.js`
-- `style.css`
+- Bootstrap and rotate require:
+  - valid `install_id` and `extension_id` format
+  - strict `Origin == chrome-extension://<extension_id>`
+- Rotations require valid existing token
 
-Features:
+## Python ML service
 
-- Multi-page navigation inside one dashboard document:
-  - Dashboard
-  - History
-  - Analytics
-  - Settings
-  - Help
-- Calls backend global stats, health, and user analytics
-- Uses control-plane token from background
-- Auto-refresh loop currently set to every 2 seconds in `app.js`
+### Service behavior
 
----
+**Source:** `ml-service/app.py`
 
-## Rust API Gateway Layer
+- Startup loads `ModelCache()` and `ProductionFeatureExtractor()`
+- Prediction endpoint: `POST /api/predict`
+- Health endpoint: `GET /health`
+- Sensitivity thresholds are dynamic:
+  - conservative: `0.80`
+  - balanced: `0.50`
+  - aggressive: `0.30`
 
-Directory: `backend/`
+### Important runtime note
 
-Main file: `backend/src/main.rs`
+`app.py` prints docs/health URLs as `:8000`, but the direct script runner currently binds **port 8888** via:
 
-Tech stack:
+```python
+uvicorn.run("app:app", host="0.0.0.0", port=8888, ...)
+```
 
-- Actix Web
-- Diesel + SQLite + r2d2 pooling
-- Optional Redis cache
-- Reqwest ML client
+The backend `.env` currently aligns to this by setting:
 
-Startup behavior:
-
-- Loads config from `.env` (or defaults)
-- Initializes cache service (degrades gracefully if Redis unavailable)
-- Initializes ML client
-- Attempts GeoIP database load (optional)
-- Opens DB pool (falls back to in-memory DB if file DB unavailable)
-- Creates/ensures control-plane credential storage
-
-Middleware chain:
-
-- Logger
-- Compression
-- Rate limiting middleware
-- API auth middleware
-
-Routing:
-
-- `/` and `/health` are public
-- `/api/*` routes are under auth middleware (with bootstrap exception)
+`ML_SERVICE_URL=http://127.0.0.1:8888`
 
 ---
 
-## ML Service Layer (FastAPI)
+## Data and Control Flows
 
-Directory: `ml-service/`
+### 1) URL scoring flow
 
-Main file: `ml-service/app.py`
+```mermaid
+sequenceDiagram
+    participant U as Extension UI/Caller
+    participant BG as background.js
+    participant API as Rust API :8080
+    participant REDIS as Redis cache
+    participant ML as Python ML :8888
 
-Startup behavior:
+    U->>BG: action=checkURL(url)
+    BG->>API: POST /api/check-url (token)
+    API->>REDIS: cache.get(url_hash)
+    alt cache hit
+        REDIS-->>API: cached URLCheckResponse
+        API-->>BG: response(cached=true)
+    else cache miss
+        API->>ML: POST /api/predict
+        ML-->>API: confidence + threat_level + metrics
+        API->>REDIS: cache.set(ttl)
+        API-->>BG: response(cached=false)
+    end
+    BG->>API: POST /api/user/:id/activity (encrypted metadata)
+    BG-->>U: scored result
+```
 
-- Adds `ml-model/deployment` and `ml-model/features` to Python path
-- Loads models via `ModelCache`
-- Creates `ProductionFeatureExtractor(timeout=3)`
-- If model load fails, health endpoint reports unhealthy and predictions return 503/500 paths
+### 2) Control-plane token flow
 
-Endpoint behavior:
+```mermaid
+sequenceDiagram
+    participant EXT as Extension
+    participant API as Rust API
+    participant DB as SQLite control_plane_credentials
 
-- `GET /` basic metadata
-- `GET /health` model readiness
-- `POST /api/predict` URL classification with sensitivity mode
+    EXT->>API: POST /api/control-plane/bootstrap\n{install_id, extension_id}\nOrigin: chrome-extension://<id>
+    API->>API: validate identifiers + origin match
+    API->>DB: upsert token
+    API-->>EXT: token
 
-Sensitivity thresholds:
+    Note over EXT,API: On 401 or update, extension rotates token
 
-- conservative: 0.80
-- balanced: 0.50
-- aggressive: 0.30
+    EXT->>API: POST /api/control-plane/rotate + X-PhishGuard-Token
+    API->>DB: validate previous token + rotate
+    API-->>EXT: new token
+```
 
-Threat level buckets (confidence-based):
+### 3) Dashboard data flow
 
-- `>= 0.9` -> CRITICAL
-- `>= 0.7` -> HIGH
-- `>= 0.5` -> MEDIUM
-- `>= 0.3` -> LOW
-- `< 0.3` -> SAFE
+```mermaid
+flowchart LR
+    DASH[dashboard app.js]
+    DASH -->|GET /api/stats/global| API[Rust API]
+    DASH -->|GET /api/user/:id/analytics| API
+    DASH -->|GET /health| API
+    API --> DB[(SQLite)]
+    DASH --> CHARTS[Chart.js visualizations]
+```
 
-Important port reality:
-
-- `app.py` prints port 8000 in startup text
-- Actual `uvicorn.run(...)` in the same file uses port 8888
+Current implementation uses polling (2 seconds) for active dashboard/history/analytics views.
 
 ---
 
-## ML Model Layer
+## API Contracts
 
-Directory: `ml-model/`
+## Public endpoints
 
-Relevant runtime pieces:
+| Endpoint                       | Method | Auth | Source                                  | Purpose                  |
+| ------------------------------ | ------ | ---- | --------------------------------------- | ------------------------ |
+| `/`                            | GET    | No   | `backend/src/handlers/root.rs`          | Basic service metadata   |
+| `/health`                      | GET    | No   | `backend/src/handlers/health.rs`        | Redis/ML health snapshot |
+| `/api/control-plane/bootstrap` | POST   | No   | `backend/src/handlers/control_plane.rs` | First token issuance     |
 
-- `deployment/model_cache.py`
-  - Loads `lightgbm_159features.pkl` and `xgboost_159features.pkl`
-  - Warms models with dummy inference
-  - Ensemble by average probability
-- `deployment/production_feature_extractor.py`
-  - Uses `UltimateFeatureIntegrator`
-  - Produces 159-feature vector
-- `features/ultimate_integrator.py`
-  - Composes URL, SSL, DNS, content, behavioral, and network extractors
+## Token-protected endpoints
 
-Current model artifacts present in repository:
+| Endpoint                           | Method | Auth | Source              | Purpose                                 |
+| ---------------------------------- | ------ | ---- | ------------------- | --------------------------------------- |
+| `/api/control-plane/rotate`        | POST   | Yes  | `control_plane.rs`  | Rotate extension token                  |
+| `/api/check-url`                   | POST   | Yes  | `url_check.rs`      | URL phishing scoring                    |
+| `/api/stats`                       | GET    | Yes  | `stats.rs`          | Cache stats (currently minimal)         |
+| `/api/stats/global`                | GET    | Yes  | `global_stats.rs`   | Global aggregate metrics                |
+| `/api/stats/user/{user_id}`        | GET    | Yes  | `global_stats.rs`   | Per-user stats                          |
+| `/api/user/{user_id}/analytics`    | GET    | Yes  | `user_analytics.rs` | User recent activity + threat breakdown |
+| `/api/user/{user_id}/activity`     | POST   | Yes  | `user_analytics.rs` | Append new threat/activity event        |
+| `/api/user/{user_id}/threats/live` | GET    | Yes  | `user_analytics.rs` | SSE live threats stream                 |
 
-- `ml-model/models/lightgbm_159features.pkl`
-- `ml-model/models/xgboost_159features.pkl`
+### Example: bootstrap token
 
----
+```bash
+curl -X POST "http://localhost:8080/api/control-plane/bootstrap" \
+  -H "Content-Type: application/json" \
+  -H "Origin: chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+  -d '{"install_id":"install_12345678","extension_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+```
 
-## Security and Privacy Model
+### Example: URL scoring
 
-1. API access control
-
-- Protected endpoints require `X-PhishGuard-Token`
-- Tokens are bootstrapped and rotated via control-plane endpoints
-- Bootstrap also validates Origin (`chrome-extension://<extension_id>`)
-
-2. Client-side URL encryption for analytics activity
-
-- Background derives key from user ID hash (Web Crypto)
-- URL data encrypted with AES-GCM before activity logging
-- Hashes and nonce are sent to backend for indexing/replay checks
-
-3. Replay control
-
-- Analytics activity endpoint validates nonce and client timestamp window
+```bash
+curl -X POST "http://localhost:8080/api/check-url" \
+  -H "Content-Type: application/json" \
+  -H "X-PhishGuard-Token: <token>" \
+  -d '{"url":"https://example.com","sensitivity_mode":"balanced"}'
+```
 
 ---
 
 ## Database and Analytics Model
 
-Primary local DB:
+## Runtime DB engine
 
-- `backend/phishguard.db` (SQLite)
+Current runtime is SQLite via Diesel (`backend/src/db/connection.rs`), defaulting to `phishguard.db` when `DATABASE_URL` is absent.
 
-Analytics schema source:
+## Core tables in active Diesel schema
 
-- `backend/migrations/2025-10-10-000001_create_user_analytics/up_sqlite_complete.sql`
-
-Key tables used by current backend analytics logic:
+**Source:** `backend/src/db/schema.rs`
 
 - `users`
 - `user_activity`
+- `device_metrics`
 - `user_threat_stats`
 - `user_threat_sources`
-- `control_plane_credentials` (ensured by service-layer helper)
+- `user_scan_queue`
+- `user_model_updates`
+- `user_privacy_settings`
 
-Legacy SQL files at root:
+Control-plane persistence table is ensured separately by service startup:
 
-- `database-schema.sql`
-- `setup_database.sql`
+- `control_plane_credentials` via `backend/src/services/control_plane_store.rs`
 
-These include PostgreSQL-oriented definitions and are not the primary path for current SQLite runtime.
+## ER snapshot (key tables)
+
+```mermaid
+erDiagram
+    users ||--o{ user_activity : has
+    users ||--o{ user_threat_stats : has
+    users ||--o{ user_threat_sources : has
+    users ||--o{ device_metrics : has
+    users ||--o{ user_scan_queue : has
+    users ||--o{ user_model_updates : has
+    users ||--o{ user_privacy_settings : has
+
+    users {
+      text user_id PK
+      text extension_id
+      text sensitivity_mode
+      int is_active
+      int total_scans
+      int total_threats_blocked
+    }
+
+    user_activity {
+      text activity_id PK
+      text user_id FK
+      text encrypted_url
+      text encrypted_domain
+      int is_phishing
+      text threat_level
+      double confidence
+      bigint timestamp
+    }
+
+    control_plane_credentials {
+      text install_id PK
+      text extension_id
+      text token
+      bigint issued_at
+    }
+```
+
+## Migration files present
+
+- PostgreSQL-style migration: `backend/migrations/.../up.sql`
+- SQLite migrations/scripts:
+  - `backend/migrations/.../up_sqlite.sql`
+  - `backend/migrations/.../up_sqlite_complete.sql`
+
+There are legacy Postgres-oriented SQL scripts in root (`database-schema.sql`, `setup_database.sql`) alongside current SQLite runtime support.
 
 ---
 
-## Configuration Reference
+## Machine Learning Pipeline
 
-### Extension constants (`background.js`)
+## Active inference path
 
-- `ML_API_URL`
-- `ANALYTICS_API_URL`
-- `CONTROL_PLANE_BOOTSTRAP_URL`
-- `CONTROL_PLANE_ROTATE_URL`
-- Local whitelist, suspicious ports, exfiltration thresholds
+`ml-service/app.py` -> `ml-model/deployment/model_cache.py` + `ml-model/deployment/production_feature_extractor.py`
 
-### Backend environment (`backend/.env`)
+### Models
 
-Current repository `.env` values:
+- LightGBM (`lightgbm_159features.pkl`)
+- XGBoost (`xgboost_159features.pkl`)
 
-```env
-HOST=0.0.0.0
-PORT=8080
-DATABASE_URL=phishguard.db
-ML_SERVICE_URL=http://127.0.0.1:8888
-RUST_LOG=info
-```
+### Feature extraction stack (current production extractor)
 
-Template (`backend/.env.example`) differs and points ML service to `8000`.
-Align these values with your actual ML service port before running.
+`ProductionFeatureExtractor` wraps `UltimateFeatureIntegrator`, which combines:
 
-### ML service
+- URL features
+- SSL/TLS features
+- DNS features
+- Content features
+- Behavioral features
+- Network features
 
-- `ml-service/app.py` starts Uvicorn on port 8888 unless changed in code/command.
+The integrator reports a 159-feature vector in current implementation.
 
----
+### Prediction output contract (ML service)
 
-## End-to-End Data Flow
+`POST /api/predict` returns:
 
-1. User opens or interacts with a page.
-2. Injected extension scripts analyze behavior/network/fingerprinting patterns.
-3. Content and monitor scripts send messages to background service worker.
-4. Background checks URL via Rust API (`/api/check-url`) with control-plane token.
-5. Rust checks Redis cache first; on miss calls ML service (`/api/predict`).
-6. ML service extracts 159 features and returns inference response.
-7. Rust returns normalized response to extension.
-8. Background logs activity to analytics endpoint.
-9. Dashboard and popup read health and analytics telemetry and render charts/cards.
+- `is_phishing`
+- `confidence`
+- `threat_level`
+- `sensitivity_mode`
+- `threshold_used`
+- `details` (feature extraction and model timing)
+- `performance_metrics`
 
 ---
 
-## Local Setup (Windows / Git Bash)
+## Repository Structure
 
-### Prerequisites
-
-- Chrome/Chromium (for extension)
-- Rust toolchain
-- Python 3.10+ recommended
-- `sqlite3` CLI (recommended for quick DB init)
-- Optional: Redis (system runs without it, but without cache)
-
-### 1) Clone and open folder
-
-```bash
-cd "c:/Users/Sri Vishnu/DP-2/DP2"
+```
+DP2/
+├── manifest.json
+├── background.js
+├── content_script.js
+├── fingerprint_detector.js
+├── network_monitor.js
+├── popup-enhanced.html
+├── popup-enhanced.js
+├── dashboard.html
+├── app.js
+├── style.css
+├── index.html
+├── test-payloads/
+│   ├── index.html
+│   ├── 1_visual_spoof.html
+│   ├── 2_nlp_spear_phishing.html
+│   ├── 3_clickjack_obfuscation.html
+│   └── 4_web3_drainer.html
+├── backend/
+│   ├── Cargo.toml
+│   ├── .env
+│   ├── .env.example
+│   ├── migrations/
+│   └── src/
+│       ├── main.rs
+│       ├── handlers/
+│       ├── middleware/
+│       ├── services/
+│       ├── db/
+│       └── models/
+├── ml-model/
+│   ├── features/
+│   ├── deployment/
+│   ├── models/
+│   └── requirements.txt
+├── ml-service/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── patch/fix utility scripts
+└── root patch/fix scripts
 ```
 
-### 2) Python environment
+---
 
-```bash
-python -m venv .venv
-source .venv/Scripts/activate
-```
+## Local Development Runbook
 
-### 3) Install ML runtime dependencies
+## Prerequisites
+
+- Chrome/Chromium browser (Manifest V3 support)
+- Rust toolchain (stable)
+- Python 3.9+
+- Optional Redis if you want cache enabled
+
+## 1) Python ML service
 
 ```bash
 cd ml-service
 pip install -r requirements.txt
-cd ../ml-model
-pip install -r requirements.txt
-cd ..
-```
-
-### 4) Initialize SQLite analytics schema (recommended)
-
-```bash
-sqlite3 backend/phishguard.db < backend/migrations/2025-10-10-000001_create_user_analytics/up_sqlite_complete.sql
-```
-
-### 5) Verify backend env
-
-Ensure `backend/.env` has `ML_SERVICE_URL` matching your ML service run port.
-
----
-
-## Running the Full Stack
-
-Open separate terminals.
-
-### Terminal A: ML service
-
-```bash
-cd "c:/Users/Sri Vishnu/DP-2/DP2/ml-service"
-source ../.venv/Scripts/activate
 python app.py
 ```
 
-By default in current code, this binds to port 8888.
+Default script path binds to `http://localhost:8888` in current `app.py`.
 
-### Terminal B: Rust backend
+## 2) Rust API gateway
 
 ```bash
-cd "c:/Users/Sri Vishnu/DP-2/DP2/backend"
+cd backend
 cargo run
 ```
 
-Expected health endpoint:
+Default local bind: `http://localhost:8080`
 
-- `http://localhost:8080/health`
+Current checked-in `backend/.env` points to ML on `127.0.0.1:8888`.
 
-### Terminal C: test server for HTML payloads
-
-```bash
-cd "c:/Users/Sri Vishnu/DP-2/DP2"
-python -m http.server 8081
-```
-
-### Load extension
+## 3) Load extension in Chrome
 
 1. Open `chrome://extensions`
 2. Enable Developer Mode
-3. Load unpacked -> select `DP2` folder
-4. Use popup to open dashboard (`dashboard.html`)
+3. Click **Load unpacked**
+4. Select the `DP2` directory
 
----
+## 4) Run local payload server (for test pages)
 
-## Testing with Dummy Payloads
+```bash
+cd DP2
+python -m http.server 8081
+```
 
-Recommended launcher:
+Then open:
 
-- `http://localhost:8081/` (root `index.html` test hub)
+- `http://localhost:8081/` (root test portal)
+- `http://localhost:8081/test-payloads/index.html` (payload index)
 
-Payload files:
+## 5) Verify health quickly
 
-- `test-payloads/1_visual_spoof.html`
-  - fake PayPal login page
-  - expected visual/DOM spoof alerts
-- `test-payloads/2_nlp_spear_phishing.html`
-  - urgency + wallet language
-  - expected NLP urgency detection
-- `test-payloads/3_clickjack_obfuscation.html`
-  - invisible overlay + eval-heavy script
-  - expected anti-evasion and clickjacking indicators
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8888/health
+```
 
-Legacy payload:
+If ML is instead on 8000, update `backend/.env` accordingly:
 
-- `test-payloads/4_web3_drainer.html`
-  - legacy test artifact
-  - active Web3 runtime interception is not part of current content-script phase flow
-
-Dashboard refresh behavior:
-
-- Current auto-refresh timer in `app.js` is 2 seconds (`setInterval(..., 2000)`)
-- Auto-refresh can be toggled in settings (`dashboardAutoRefresh`)
-
----
-
-## API Reference
-
-Base URL: `http://localhost:8080`
-
-### Public endpoints
-
-- `GET /`
-- `GET /health`
-
-### Control plane
-
-- `POST /api/control-plane/bootstrap`
-  - no token required
-  - requires valid extension/install identifiers
-  - requires Origin matching `chrome-extension://<extension_id>`
-- `POST /api/control-plane/rotate`
-  - requires existing token + matching identifiers + matching Origin
-
-### Protected endpoints (token required)
-
-- `POST /api/check-url`
-- `GET /api/stats`
-- `GET /api/stats/global`
-- `GET /api/stats/user/{user_id}`
-- `GET /api/user/{user_id}/analytics`
-- `POST /api/user/{user_id}/activity`
-- `GET /api/user/{user_id}/threats/live` (SSE)
-
-Header:
-
-```http
-X-PhishGuard-Token: <token>
+```env
+ML_SERVICE_URL=http://127.0.0.1:8000
 ```
 
 ---
 
-## Scripts and Utilities in Root
+## Testing and Validation
 
-The root includes multiple utility scripts from iterative development/debugging.
-Examples:
+## Payloads
 
-- `patch_*.js`
-- `remove_web3*.js`
-- `fix_*.js`
-- `apply_ui.js`
-- `generate_best_models.py`
+| Payload                             | File                                         | Intent                                |
+| ----------------------------------- | -------------------------------------------- | ------------------------------------- |
+| Visual spoofing                     | `test-payloads/1_visual_spoof.html`          | Brand impersonation + credential lure |
+| NLP spear phishing                  | `test-payloads/2_nlp_spear_phishing.html`    | Urgency + financial language trigger  |
+| Clickjacking + obfuscation          | `test-payloads/3_clickjack_obfuscation.html` | Overlay + eval-heavy script trigger   |
+| Web3 drainer (legacy test artifact) | `test-payloads/4_web3_drainer.html`          | Legacy wallet-drain simulation page   |
 
-These are not all part of steady-state runtime. They are maintenance/debug aids used to patch,
-test, or refactor behavior during development.
+## Dashboard and popup validation
+
+- Open extension popup to confirm status and recent events
+- Open `dashboard.html` to validate:
+  - global stats
+  - history table
+  - chart rendering
+  - service status indicators
 
 ---
 
-## Known Mismatches and Limitations
+## Security and Privacy Notes
 
-This section intentionally documents current reality from source.
+## Positive controls in current code
 
-1. Port mismatch risk
+- Control-plane token gating for `/api/*` routes
+- Origin-bound bootstrap for extension identity check
+- AES-GCM encrypted URL payload logging from extension before analytics write
+- Optional GeoIP enrichment gate (`ALLOW_CLIENT_IP_ANALYTICS`)
+- Payload size limits and per-route rate limiting middleware
 
-- `ml-service/app.py` runs on 8888 by default
-- Some docs/templates still reference 8000
-- Backend must point `ML_SERVICE_URL` to actual ML port
+## Design intent
 
-2. Popup user-id key mismatch
+- Keep sensitive browsing details encrypted in analytics path
+- Favor local-first operation
+- Limit API surface by requiring locally bootstrapped token
 
-- Popup reads `pg_user_id` with fallback `demo-user`
-- Background/dashboard primarily use `userId`
-- This can cause analytics identity drift between views
+---
 
-3. Content-to-background action mismatch
+## Performance Notes
 
-- `content_script.js` sends actions like `suspiciousActivity`, `userAction`, `statusReport`
-- `background.js` switch handler does not explicitly process these action names
-- As a result, some telemetry may log as unknown action in background debug output
+Runtime behavior and performance are shaped by:
 
-4. Duplicate warning map keys
+- Redis cache hit path in Rust gateway (`cache.rs`)
+- ML inference timeout settings (`ml_client.rs`)
+- feature extraction overhead in Python (`production_feature_extractor.py`)
+- dashboard polling frequency (`app.js` currently every 2 seconds)
 
-- `content_script.js` warning messages object includes duplicate keys in places
-- JavaScript keeps the last duplicate entry; behavior still runs but config is noisy
+Source-level metrics snapshot (excluding build artifacts):
 
-5. Network blocking caveat in MV3
+- Total lines (`.js`, `.py`, `.rs`, `.html`, `.css`, `.sql`, `.md`): **23,454**
+- File counts:
+  - JavaScript: 31
+  - Python: 21
+  - Rust: 26
+  - HTML: 8
+  - CSS: 2
+  - SQL: 6
+  - Markdown: 4
 
-- `background.js` uses `onBeforeRequest` without blocking mode
-- comments already note MV3 enterprise limitation
-- returning `{ cancel: true }` is not guaranteed to enforce hard blocking in this mode
+---
 
-6. Legacy Web3 artifacts
+## Known Gaps and Technical Debt
 
-- Web3 runtime phase removed from active content-script engines
-- legacy test file and older docs/scripts may still mention Phase 5
+This section is intentionally explicit to keep maintainers and reviewers aligned with current code reality.
 
-7. Legacy SQL docs
+1. **ML port mismatch risk**
+   - `ml-service/app.py` script mode binds to `8888`
+   - printed startup text still references `8000`
+   - `.env.example` also references `8000`
 
-- root SQL files include PostgreSQL-oriented schema/setup
-- active runtime analytics path is SQLite-backed under `backend/`
+2. **Dashboard update method**
+   - Dashboard currently uses polling every 2 seconds (`app.js`)
+   - SSE endpoint exists (`/api/user/:id/threats/live`) but is not currently wired into dashboard code
 
-8. Cache stats currently placeholder
+3. **Action routing mismatch from `content_script.js`**
+   - content script reports actions such as `suspiciousActivity`, `statusReport`, `popupAttempt`, `visibilityChange`
+   - background message switch does not currently implement dedicated handlers for those action names
 
-- `backend/src/services/cache.rs` returns `(0,0)` in `get_stats()`
-- `/api/stats` hit/miss numbers are not yet true Redis telemetry
+4. **Legacy Web3 remnants**
+   - Active Web3 interceptor engine was removed from the runtime phase block
+   - Legacy constants/artifacts remain in warning maps and test payload files
+
+5. **Patch utility script drift**
+   - Multiple `patch_*.js`/`fix_*.js` scripts were one-off repair tools
+   - Some contain hardcoded paths from prior workspace layout and are not production runtime code
+
+6. **Stats endpoint limitations**
+   - `/api/stats` currently reports cache stats with placeholder behavior in `cache.get_stats()`
+
+7. **SQL/documentation divergence**
+   - Root SQL files include older PostgreSQL-focused setup patterns
+   - Runtime backend currently defaults to SQLite unless overridden
 
 ---
 
 ## Troubleshooting Guide
 
-### A) Dashboard shows backend unreachable
+## Symptom: Dashboard shows backend offline
 
 Check:
 
+1. Rust server running on `:8080`
+2. Browser can reach `GET /health`
+3. Control-plane token present in extension storage
+
+## Symptom: Backend healthy but ML unavailable
+
+Likely ML port mismatch.
+
+Verify:
+
+- `backend/.env` -> `ML_SERVICE_URL`
+- actual ML bind port from `app.py` or uvicorn command
+
+## Symptom: 401 Unauthorized local API access
+
+Control-plane token invalid or absent.
+
+Resolution:
+
+1. reload extension
+2. allow bootstrap to run from extension origin
+3. ensure `Origin` rules in backend are satisfied
+
+## Symptom: no analytics movement
+
+Check:
+
+- tokened calls from popup/dashboard are succeeding
+- writes to `/api/user/:id/activity` are returning 200
+- SQLite database file is writable and schema present
+
+## Symptom: Safety Abort button not closing tab
+
+Current implementation sends `closeCurrentTab` to background and attempts `window.close()` in content script.
+
+Verify:
+
+- extension reloaded after latest background/content updates
+- `tabs` permission still present in manifest
+
+---
+
+## Operational Scripts and Patch Utilities
+
+Repository includes many patch/fix scripts from iterative development and debugging sessions.
+
+Examples:
+
+- `patch_dashboard_interval.js`
+- `patch_bg_close_tab.js`
+- `patch_web3.js`
+- `fix_safety_abort.js`
+- `remove_web3*.js`
+- `ml-service/patch_*.js` and `ml-service/fix_*.js`
+
+Guidance:
+
+- Treat them as maintenance utilities, not core runtime dependencies
+- Review script internals before executing in a different environment
+
+---
+
+## Contribution Guidelines
+
+## Branch and commit conventions
+
+- Prefer small focused commits
+- Keep runtime changes separate from docs-only changes
+- Include reproducible validation steps in PR description
+
+## Recommended quality checks
+
+### Rust
+
 ```bash
-curl http://localhost:8080/health
+cd backend
+cargo fmt
+cargo clippy -- -D warnings
+cargo test
 ```
 
-If not reachable:
+### Python
 
-- Ensure Rust backend is running
-- Ensure port 8080 is not occupied by another process
+```bash
+cd ml-service
+python -m pip install -r requirements.txt
+python -m py_compile app.py
+```
 
-### B) Dashboard says auth required / token errors
+### Extension smoke
 
-- Reload extension in `chrome://extensions`
-- This re-triggers bootstrap/refresh token paths in background
-- Ensure backend is running before extension startup
-
-### C) ML service unavailable in backend health
-
-- Confirm ML service port and backend `ML_SERVICE_URL` match
-- If `app.py` is used unmodified, ML likely runs on 8888
-
-### D) Analytics not updating
-
-- Ensure SQLite schema is initialized (run migration SQL into `backend/phishguard.db`)
-- Ensure dashboard auto-refresh is enabled
-- Verify `GET /api/user/{user_id}/analytics` succeeds with token
-
-### E) Test pages do not trigger warnings
-
-- Reload extension after any script edits
-- Open payloads via local HTTP server (not file://)
-- Use browser console for content-script and background logs
+1. Reload extension in `chrome://extensions`
+2. Open popup and dashboard
+3. Validate `/health`, `/api/stats/global`, `/api/user/:id/analytics` all respond
 
 ---
 
-## Recommended Next Cleanup Steps
+## License
 
-1. Unify ML port configuration across:
-   - `backend/.env`
-   - `backend/.env.example`
-   - `ml-service/app.py` startup print and actual run port
-   - any docs and test pages
+MIT License.
 
-2. Unify extension user identity keys:
-   - standardize on `userId` in popup, dashboard, and background
+Project authors and contributors include:
 
-3. Add handlers in `background.js` for:
-   - `suspiciousActivity`
-   - `userAction`
-   - `statusReport`
-   - `visibilityChange`
-   - `popupAttempt`
-
-4. Remove duplicate warning message keys from `content_script.js`.
-
-5. Decide and document final policy for legacy Web3 assets:
-   - either remove legacy files/docs or reintroduce as optional feature behind config flag.
-
-6. Implement real cache statistics in `cache.rs` (`INFO`/keyspace metrics) for `/api/stats`.
-
-7. Consolidate and archive one-off patch scripts into a dedicated `scripts/maintenance` folder.
+- Sri Vishnu
+- Avinash Lingam
+- Keerthana V
+- Bharath Raj
 
 ---
 
-If you want, the next step can be a second pass that converts this README into a stricter
-developer handbook with separate sections for contributors, API consumers, and security reviewers.
+## Final Notes
+
+This README is intentionally implementation-accurate for the current DP2 codebase state, including current integration behavior and known mismatches.
+
+If you want, the next step is to produce a v2 "release-grade" README variant that assumes stabilized ports/messages and removes legacy patch-script noise from the public narrative.
