@@ -772,17 +772,5 @@ python -m py_compile app.py
 
 MIT License.
 
-Project authors and contributors include:
-
-- Sri Vishnu
-- Avinash Lingam
-- Keerthana V
-- Bharath Raj
-
+Project author: Sri Vishnu
 ---
-
-## Final Notes
-
-This README is intentionally implementation-accurate for the current DP2 codebase state, including current integration behavior and known mismatches.
-
-If you want, the next step is to produce a v2 "release-grade" README variant that assumes stabilized ports/messages and removes legacy patch-script noise from the public narrative.
